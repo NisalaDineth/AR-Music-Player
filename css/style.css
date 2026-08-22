@@ -1,0 +1,31 @@
+#song-overlay {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  width: 280px;
+  padding: 20px;
+  background: rgba(20, 20, 20, 0.9);
+  color: white;
+  text-align: center;
+  border-radius: 16px;
+  z-index: 9999;
+  font-family: Arial, sans-serif;
+}
+
+.song-title {
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.song-artist {
+  margin-top: 8px;
+  font-size: 16px;
+  opacity: 0.8;
+}
+
+.play-text {
+  margin-top: 15px;
+  font-size: 18px;
+}

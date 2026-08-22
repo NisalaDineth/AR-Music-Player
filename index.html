@@ -5,26 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
     body {
       margin: 0;
     }
   </style>
+
+  <link rel="stylesheet" href="./css/style.css">
+
 </head>
 
 <body>
 
-  <a-scene>
+  <a-scene
+    mindar-image="imageTargetSrc: ./targets/targets.mind;"
+    color-space="sRGB"
+    renderer="colorManagement: true, physicallyCorrectLights"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false"
+  >
 
-    <a-camera position="0 0 0"></a-camera>
+    <a-camera
+      position="0 0 0"
+      look-controls="enabled: false">
+    </a-camera>
 
     <a-assets>
     <a-asset-item id="mixer" src="./models/mixer.glb"></a-asset-item>
     <a-asset-item id="monitor" src="./models/monitor.glb"></a-asset-item>
+
+    <audio id="song1" src="./audio/song1.mp3"></audio>
+    <audio id="song2" src="./audio/song2.mp3"></audio>
     </a-assets>
 
-    <a-gltf-model
+    <a-entity mindar-image-target="targetIndex: 0">
+    </a-entity>
+    <a-entity mindar-image-target="targetIndex: 1">
+    </a-entity>
+
+    <!-- <a-gltf-model
         src="#mixer"
         position="-1 0 -3"
         scale="1.0 1.0 1.0">
@@ -35,9 +56,98 @@
         position="1 0 -3"
         scale="1.5 1.5 1.5"
         rotation="0 -35 0">
-    </a-gltf-model>
+    </a-gltf-model> -->
   
   </a-scene>
 
+  <div id="song-overlay">
+    <div class="song-title">Song Title</div>
+    <div class="song-artist">Artist Name</div>
+    <div id="play-text" class="play-text">▶ PLAY</div>
+  </div>
+
+  <script>
+    const targets = document.querySelectorAll('[mindar-image-target]');
+    const overlay = document.getElementById('song-overlay');
+    const songs = {
+      0: document.getElementById('song1'),
+      1: document.getElementById('song2')
+    };
+
+    let currentSong = null;
+    const playText = document.getElementById('play-text');
+    const titleText = document.querySelector('.song-title');
+    const artistText = document.querySelector('.song-artist');
+    const tracks = {
+      0: {
+        title: "Angel Of The Flame",
+        artist: "Johny Grimes"
+      },
+
+      1: {
+        title: "Furious",
+        artist: "Aylex"
+      }
+    };
+
+    targets.forEach((target) => {
+
+      target.addEventListener('targetFound', () => {
+
+        const index =
+          target.getAttribute('mindar-image-target').targetIndex;
+
+        titleText.textContent = tracks[index].title;
+        artistText.textContent = tracks[index].artist;
+
+        currentSong = songs[index];
+
+        // Only show the details.
+        // DO NOT start, pause, or reset the song.
+        playText.textContent =
+          currentSong.paused ? '▶ PLAY' : '⏸ PAUSE';
+
+        overlay.style.display = 'block';
+      });
+
+      target.addEventListener('targetLost', () => {
+        overlay.style.display = 'none';
+      });
+
+    });
+
+    overlay.addEventListener('click', () => {
+
+      if (!currentSong) return;
+
+      // If this song is already playing, pause it.
+      if (!currentSong.paused) {
+        currentSong.pause();
+        return;
+      }
+
+      // Pause any other song that may be playing.
+      Object.values(songs).forEach((song) => {
+        if (song !== currentSong) {
+          song.pause();
+        }
+      });
+
+      // Now play the selected song.
+      currentSong.play();
+    });
+
+      Object.values(songs).forEach((song) => {
+
+        song.addEventListener('play', () => {
+          playText.textContent = '⏸ PAUSE';
+        });
+
+        song.addEventListener('pause', () => {
+          playText.textContent = '▶ PLAY';
+        });
+
+      });
+  </script>
 </body>
 </html>
