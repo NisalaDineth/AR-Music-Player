@@ -19,14 +19,22 @@
 
     <a-camera position="0 0 0"></a-camera>
 
-      <a-assets>
+    <a-assets>
     <a-asset-item id="mixer" src="./models/mixer.glb"></a-asset-item>
+    <a-asset-item id="monitor" src="./models/monitor.glb"></a-asset-item>
     </a-assets>
 
     <a-gltf-model
         src="#mixer"
-        position="0 0 -3"
-        scale="1.5 1.5 1.5">
+        position="-1 0 -3"
+        scale="1.0 1.0 1.0">
+    </a-gltf-model>
+
+    <a-gltf-model
+        src="#monitor"
+        position="1 0 -3"
+        scale="1.5 1.5 1.5"
+        rotation="0 -35 0">
     </a-gltf-model>
   
   </a-scene>
