@@ -38,11 +38,14 @@
 
     <audio id="song1" src="./audio/song1.mp3"></audio>
     <audio id="song2" src="./audio/song2.mp3"></audio>
+    <audio id="song3" src="./audio/song3.mp3"></audio>
     </a-assets>
 
     <a-entity mindar-image-target="targetIndex: 0">
     </a-entity>
     <a-entity mindar-image-target="targetIndex: 1">
+    </a-entity>
+    <a-entity mindar-image-target="targetIndex: 2">
     </a-entity>
 
     <!-- <a-gltf-model
@@ -71,7 +74,8 @@
     const overlay = document.getElementById('song-overlay');
     const songs = {
       0: document.getElementById('song1'),
-      1: document.getElementById('song2')
+      1: document.getElementById('song2'),
+      2: document.getElementById('song3')
     };
 
     let currentSong = null;
@@ -87,6 +91,11 @@
       1: {
         title: "Furious",
         artist: "Aylex"
+      },
+
+      2: {
+        title: "Jamaican Rasta",
+        artist: "Walen"
       }
     };
 
