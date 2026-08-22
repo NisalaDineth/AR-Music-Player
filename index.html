@@ -16,13 +16,19 @@
 <body>
 
   <a-scene>
-    <a-box
-      position="0 1 -3"
-      rotation="0 45 0"
-      color="red">
-    </a-box>
 
     <a-camera position="0 0 0"></a-camera>
+
+      <a-assets>
+    <a-asset-item id="mixer" src="./models/mixer.glb"></a-asset-item>
+    </a-assets>
+
+    <a-gltf-model
+        src="#mixer"
+        position="0 0 -3"
+        scale="1.5 1.5 1.5">
+    </a-gltf-model>
+  
   </a-scene>
 
 </body>
