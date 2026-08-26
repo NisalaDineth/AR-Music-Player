@@ -29,3 +29,39 @@
   margin-top: 15px;
   font-size: 18px;
 }
+
+#object-menu {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+
+  padding: 12px;
+  width: 130px;
+
+  background: rgba(20, 20, 20, 0.85);
+  border-radius: 12px;
+
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+
+.menu-title {
+  color: white;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+#object-menu button {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #ffffff;
+  color: #222;
+
+  font-size: 13px;
+}

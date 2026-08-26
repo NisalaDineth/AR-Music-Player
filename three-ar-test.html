@@ -1,0 +1,345 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Three.js AR Test</title>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+  </style>
+</head>
+
+<body>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+
+import * as THREE from
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+import { ARButton } from
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/ARButton.js';
+
+import { GLTFLoader } from
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+
+
+/* =========================================================
+   BASIC THREE.JS SETUP
+   ========================================================= */
+
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(
+  70,
+  window.innerWidth / window.innerHeight,
+  0.01,
+  20
+);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  alpha: true
+});
+
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(
+  window.innerWidth,
+  window.innerHeight
+);
+
+renderer.xr.enabled = true;
+
+document.body.appendChild(renderer.domElement);
+
+
+/* =========================================================
+   MIXER MODEL
+   ========================================================= */
+
+const loader = new GLTFLoader();
+
+let mixerModel = null;
+
+loader.load(
+  './models/mixer.glb',
+
+  (gltf) => {
+
+    mixerModel = gltf.scene;
+
+    mixerModel.scale.set(
+      0.2,
+      0.2,
+      0.2
+    );
+    
+    mixerModel.rotation.set(
+      45,
+      Math.PI,
+      0
+    );
+
+    mixerModel.visible = false;
+
+    scene.add(mixerModel);
+
+    // Basic lighting for the 3D model
+    const ambientLight = new THREE.AmbientLight(
+      0xffffff,
+      2
+    );
+
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(
+      0xffffff,
+      2
+    );
+
+    directionalLight.position.set(
+      2,
+      4,
+      2
+    );
+
+    scene.add(directionalLight);
+
+    alert('Mixer loaded');
+
+  },
+
+  undefined,
+
+  (error) => {
+
+    alert(
+      'Mixer loading error:',
+      error
+    );
+
+  }
+);
+
+
+/* =========================================================
+   PLACEMENT RETICLE
+   ========================================================= */
+
+const reticleGeometry =
+  new THREE.RingGeometry(
+    0.08,
+    0.1,
+    32
+  );
+
+const reticleMaterial =
+  new THREE.MeshBasicMaterial({
+    color: 0x00ff00
+  });
+
+const reticle =
+  new THREE.Mesh(
+    reticleGeometry,
+    reticleMaterial
+  );
+
+reticle.rotation.x = -Math.PI / 2;
+
+reticle.matrixAutoUpdate = false;
+reticle.visible = false;
+
+scene.add(reticle);
+
+
+/* =========================================================
+   WEBXR AR BUTTON
+   ========================================================= */
+
+const arButton =
+  ARButton.createButton(
+    renderer,
+    {
+      requiredFeatures: ['hit-test']
+    }
+  );
+
+document.body.appendChild(arButton);
+
+
+/* =========================================================
+   HIT-TEST VARIABLES
+   ========================================================= */
+
+let hitTestSource = null;
+let hitTestSourceRequested = false;
+
+
+/* =========================================================
+   TAP TO PLACE
+   ========================================================= */
+
+function onSelect() {
+
+  if (!reticle.visible || !mixerModel) {
+    return;
+  }
+
+  mixerModel.position.setFromMatrixPosition(
+    reticle.matrix
+  );
+
+  mixerModel.visible = true;
+
+}
+
+
+renderer.xr.addEventListener(
+  'sessionend',
+  () => {
+
+    hitTestSource = null;
+    hitTestSourceRequested = false;
+
+    reticle.visible = false;
+
+    if (mixerModel) {
+      mixerModel.visible = false;
+    }
+
+  }
+);
+
+
+/* =========================================================
+   TAP EVENT
+   ========================================================= */
+
+renderer.xr.addEventListener(
+  'sessionstart',
+  () => {
+
+    const session = renderer.xr.getSession();
+
+    session.addEventListener(
+      'select',
+      onSelect
+    );
+
+  }
+);
+
+
+/* =========================================================
+   ANIMATION LOOP
+   ========================================================= */
+
+renderer.setAnimationLoop(
+  (timestamp, frame) => {
+
+    if (frame) {
+
+      const session =
+        renderer.xr.getSession();
+
+      if (!hitTestSourceRequested) {
+
+        session.requestReferenceSpace(
+          'viewer'
+        ).then((referenceSpace) => {
+
+          session.requestHitTestSource({
+            space: referenceSpace
+          }).then((source) => {
+
+            hitTestSource = source;
+
+          });
+
+        });
+
+        hitTestSourceRequested = true;
+      }
+
+
+      if (hitTestSource) {
+
+        const referenceSpace =
+          renderer.xr.getReferenceSpace();
+
+        const hitTestResults =
+          frame.getHitTestResults(
+            hitTestSource
+          );
+
+        if (hitTestResults.length > 0) {
+
+          const hit =
+            hitTestResults[0];
+
+          const pose =
+            hit.getPose(referenceSpace);
+
+          reticle.visible = true;
+
+          reticle.matrix.fromArray(
+            pose.transform.matrix
+          );
+
+        } else {
+
+          reticle.visible = false;
+
+        }
+
+      }
+
+    }
+
+    renderer.render(
+      scene,
+      camera
+    );
+
+  }
+);
+
+
+/* =========================================================
+   WINDOW RESIZE
+   ========================================================= */
+
+window.addEventListener(
+  'resize',
+  () => {
+
+    camera.aspect =
+      window.innerWidth /
+      window.innerHeight;
+
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(
+      window.innerWidth,
+      window.innerHeight
+    );
+
+  }
+);
+
+</script>
+
+</body>
+</html>
