@@ -180,15 +180,26 @@
 
 
     /* =========================================================
-      HIT-TEST VARIABLES
+      HIT-TEST / DRAG STATE
       ========================================================= */
 
     let hitTestSource = null;
     let hitTestSourceRequested = false;
 
+    // Screen-tap ("transient") inputs can't be used with the regular
+    // requestHitTestSource({space}) call - they need this dedicated API.
+    let transientHitTestSource = null;
+    let transientHitTestSourceRequested = false;
+
+    // Drag state.
     let dragging = false;
-    let dragHitTestSource = null;
-    let inputSource = null;
+    let activeInputSource = null;   // The input source currently pressed down (selectstart -> selectend).
+    let pressStartTime = 0;         // performance.now() timestamp of the current press.
+    let justFinishedDrag = false;   // Suppresses tap-to-place right after a drag ends.
+
+    const LONG_PRESS_DURATION_MS = 500;
+
+    const dragRaycaster = new THREE.Raycaster();
 
 
     /* =========================================================
@@ -197,11 +208,20 @@
 
     function onSelect() {
 
+      // If this tap/release is actually the end of a drag gesture, it's
+      // already been handled by the drag logic in the render loop -
+      // ignore it here so the mixer doesn't jump back to the reticle.
+      if (justFinishedDrag) {
+        justFinishedDrag = false;
+        return;
+      }
+
       if (!reticle.visible || !mixerModel) {
         return;
       }
 
-      // Only allow the first tap to place the mixer.
+      // Only allow the first tap to place the mixer. Once placed, a
+      // plain tap does nothing - moving it requires a long press + drag.
       if (mixerModel.visible) {
         return;
       }
@@ -215,15 +235,54 @@
     }
 
 
+    /* =========================================================
+      LONG-PRESS-TO-DRAG HELPERS
+      ========================================================= */
+
+    // Builds a world-space ray from an XRInputSource's target ray, so we
+    // can test whether it is currently pointing at the mixer model.
+    function getInputSourceRay(inputSource, frame, referenceSpace) {
+
+      const pose = frame.getPose(
+        inputSource.targetRaySpace,
+        referenceSpace
+      );
+
+      if (!pose) {
+        return null;
+      }
+
+      const matrix = new THREE.Matrix4().fromArray(
+        pose.transform.matrix
+      );
+
+      const origin = new THREE.Vector3().setFromMatrixPosition(matrix);
+
+      const direction = new THREE.Vector3(0, 0, -1)
+        .transformDirection(matrix);
+
+      return { origin, direction };
+
+    }
+
+
     renderer.xr.addEventListener(
       'sessionend',
       () => {
 
         hitTestSource = null;
         hitTestSourceRequested = false;
+
+        if (transientHitTestSource) {
+          transientHitTestSource.cancel();
+        }
+
+        transientHitTestSource = null;
+        transientHitTestSourceRequested = false;
+
         dragging = false;
-        dragHitTestSource = null;
-        inputSource = null;
+        activeInputSource = null;
+        justFinishedDrag = false;
 
         reticle.visible = false;
 
@@ -236,7 +295,7 @@
 
 
     /* =========================================================
-      TAP EVENT
+      TAP EVENTS
       ========================================================= */
 
     renderer.xr.addEventListener(
@@ -261,6 +320,12 @@
               inputSource.targetRaySpace
             );
 
+            // Start tracking this press so the animation loop can detect
+            // a long press on the mixer model.
+            activeInputSource = inputSource;
+            pressStartTime = performance.now();
+            dragging = false;
+
           }
         );
 
@@ -277,6 +342,16 @@
               'handedness:',
               inputSource.handedness
             );
+
+            // If we were dragging, drop the mixer where it currently is
+            // and swallow the upcoming 'select' event so it doesn't
+            // re-trigger tap-to-place.
+            if (dragging) {
+              justFinishedDrag = true;
+            }
+
+            dragging = false;
+            activeInputSource = null;
 
           }
         );
@@ -302,14 +377,17 @@
           const session =
             renderer.xr.getSession();
 
+          const referenceSpace =
+            renderer.xr.getReferenceSpace();
+
           if (!hitTestSourceRequested) {
 
             session.requestReferenceSpace(
               'viewer'
-            ).then((referenceSpace) => {
+            ).then((viewerSpace) => {
 
               session.requestHitTestSource({
-                space: referenceSpace
+                space: viewerSpace
               }).then((source) => {
 
                 hitTestSource = source;
@@ -321,11 +399,31 @@
             hitTestSourceRequested = true;
           }
 
+          if (!transientHitTestSourceRequested) {
 
-          if (hitTestSource) {
+            session.requestHitTestSourceForTransientInput({
+              profile: 'generic-touchscreen'
+            }).then((source) => {
 
-            const referenceSpace =
-              renderer.xr.getReferenceSpace();
+              transientHitTestSource = source;
+
+            }).catch((error) => {
+
+              console.error(
+                'Transient hit test subscription failed',
+                error
+              );
+
+            });
+
+            transientHitTestSourceRequested = true;
+          }
+
+
+          // Placement reticle: only shown before the mixer has been
+          // placed. Once placed, relocating it is done via long-press
+          // + drag instead of the look-and-tap reticle.
+          if (hitTestSource && (!mixerModel || !mixerModel.visible)) {
 
             const hitTestResults =
               frame.getHitTestResults(
@@ -352,25 +450,81 @@
 
             }
 
+          } else {
+
+            reticle.visible = false;
+
           }
 
+
+          // Long-press detection: while a finger/controller is held down
+          // on top of the already-placed mixer for longer than
+          // LONG_PRESS_DURATION_MS, enter drag mode.
           if (
-            dragging &&
-            dragHitTestSource
+            activeInputSource &&
+            !dragging &&
+            mixerModel &&
+            mixerModel.visible
           ) {
 
-            const referenceSpace =
-              renderer.xr.getReferenceSpace();
+            const elapsed =
+              performance.now() - pressStartTime;
 
-            const dragResults =
-              frame.getHitTestResults(
-                dragHitTestSource
+            if (elapsed >= LONG_PRESS_DURATION_MS) {
+
+              const ray = getInputSourceRay(
+                activeInputSource,
+                frame,
+                referenceSpace
               );
 
-            if (dragResults.length > 0) {
+              if (ray) {
+
+                dragRaycaster.set(
+                  ray.origin,
+                  ray.direction
+                );
+
+                const intersections =
+                  dragRaycaster.intersectObject(
+                    mixerModel,
+                    true
+                  );
+
+                if (intersections.length > 0) {
+
+                  dragging = true;
+
+                }
+
+              }
+
+            }
+
+          }
+
+
+          // While dragging, move the mixer to follow the surface point
+          // under the finger/controller each frame.
+          if (
+            dragging &&
+            transientHitTestSource &&
+            activeInputSource
+          ) {
+
+            const transientResults =
+              frame.getHitTestResultsForTransientInput(
+                transientHitTestSource
+              );
+
+            const match = transientResults.find(
+              (result) => result.inputSource === activeInputSource
+            );
+
+            if (match && match.results.length > 0) {
 
               const hit =
-                dragResults[0];
+                match.results[0];
 
               const pose =
                 hit.getPose(referenceSpace);
