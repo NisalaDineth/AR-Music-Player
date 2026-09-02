@@ -15,331 +15,416 @@
 </head>
 
 <body>
-
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
-  }
-}
-</script>
-
-<script type="module">
-
-import * as THREE from
-  'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-
-import { ARButton } from
-  'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/ARButton.js';
-
-import { GLTFLoader } from
-  'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
-
-
-/* =========================================================
-   BASIC THREE.JS SETUP
-   ========================================================= */
-
-const scene = new THREE.Scene();
-
-const camera = new THREE.PerspectiveCamera(
-  70,
-  window.innerWidth / window.innerHeight,
-  0.01,
-  20
-);
-
-const renderer = new THREE.WebGLRenderer({
-  antialias: true,
-  alpha: true
-});
-
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(
-  window.innerWidth,
-  window.innerHeight
-);
-
-renderer.xr.enabled = true;
-
-document.body.appendChild(renderer.domElement);
-
-
-/* =========================================================
-   MIXER MODEL
-   ========================================================= */
-
-const loader = new GLTFLoader();
-
-let mixerModel = null;
-
-loader.load(
-  './models/mixer.glb',
-
-  (gltf) => {
-
-    mixerModel = gltf.scene;
-
-    mixerModel.scale.set(
-      0.2,
-      0.2,
-      0.2
-    );
-    
-    mixerModel.rotation.set(
-      45,
-      Math.PI,
-      0
-    );
-
-    mixerModel.visible = false;
-
-    scene.add(mixerModel);
-
-    // Basic lighting for the 3D model
-    const ambientLight = new THREE.AmbientLight(
-      0xffffff,
-      2
-    );
-
-    scene.add(ambientLight);
-
-    const directionalLight = new THREE.DirectionalLight(
-      0xffffff,
-      2
-    );
-
-    directionalLight.position.set(
-      2,
-      4,
-      2
-    );
-
-    scene.add(directionalLight);
-
-    alert('Mixer loaded');
-
-  },
-
-  undefined,
-
-  (error) => {
-
-    alert(
-      'Mixer loading error:',
-      error
-    );
-
-  }
-);
-
-
-/* =========================================================
-   PLACEMENT RETICLE
-   ========================================================= */
-
-const reticleGeometry =
-  new THREE.RingGeometry(
-    0.08,
-    0.1,
-    32
-  );
-
-const reticleMaterial =
-  new THREE.MeshBasicMaterial({
-    color: 0x00ff00
-  });
-
-const reticle =
-  new THREE.Mesh(
-    reticleGeometry,
-    reticleMaterial
-  );
-
-reticle.rotation.x = -Math.PI / 2;
-
-reticle.matrixAutoUpdate = false;
-reticle.visible = false;
-
-scene.add(reticle);
-
-
-/* =========================================================
-   WEBXR AR BUTTON
-   ========================================================= */
-
-const arButton =
-  ARButton.createButton(
-    renderer,
-    {
-      requiredFeatures: ['hit-test']
+  
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
     }
-  );
-
-document.body.appendChild(arButton);
-
-
-/* =========================================================
-   HIT-TEST VARIABLES
-   ========================================================= */
-
-let hitTestSource = null;
-let hitTestSourceRequested = false;
-
-
-/* =========================================================
-   TAP TO PLACE
-   ========================================================= */
-
-function onSelect() {
-
-  if (!reticle.visible || !mixerModel) {
-    return;
   }
+  </script>
 
-  mixerModel.position.setFromMatrixPosition(
-    reticle.matrix
-  );
+  <script type="module">
 
-  mixerModel.visible = true;
+    import * as THREE from
+      'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
-}
+    import { ARButton } from
+      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/ARButton.js';
 
-
-renderer.xr.addEventListener(
-  'sessionend',
-  () => {
-
-    hitTestSource = null;
-    hitTestSourceRequested = false;
-
-    reticle.visible = false;
-
-    if (mixerModel) {
-      mixerModel.visible = false;
-    }
-
-  }
-);
+    import { GLTFLoader } from
+      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
 
-/* =========================================================
-   TAP EVENT
-   ========================================================= */
+    /* =========================================================
+      BASIC THREE.JS SETUP
+      ========================================================= */
 
-renderer.xr.addEventListener(
-  'sessionstart',
-  () => {
+    const scene = new THREE.Scene();
 
-    const session = renderer.xr.getSession();
-
-    session.addEventListener(
-      'select',
-      onSelect
+    const camera = new THREE.PerspectiveCamera(
+      70,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      20
     );
 
-  }
-);
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true
+    });
 
-
-/* =========================================================
-   ANIMATION LOOP
-   ========================================================= */
-
-renderer.setAnimationLoop(
-  (timestamp, frame) => {
-
-    if (frame) {
-
-      const session =
-        renderer.xr.getSession();
-
-      if (!hitTestSourceRequested) {
-
-        session.requestReferenceSpace(
-          'viewer'
-        ).then((referenceSpace) => {
-
-          session.requestHitTestSource({
-            space: referenceSpace
-          }).then((source) => {
-
-            hitTestSource = source;
-
-          });
-
-        });
-
-        hitTestSourceRequested = true;
-      }
-
-
-      if (hitTestSource) {
-
-        const referenceSpace =
-          renderer.xr.getReferenceSpace();
-
-        const hitTestResults =
-          frame.getHitTestResults(
-            hitTestSource
-          );
-
-        if (hitTestResults.length > 0) {
-
-          const hit =
-            hitTestResults[0];
-
-          const pose =
-            hit.getPose(referenceSpace);
-
-          reticle.visible = true;
-
-          reticle.matrix.fromArray(
-            pose.transform.matrix
-          );
-
-        } else {
-
-          reticle.visible = false;
-
-        }
-
-      }
-
-    }
-
-    renderer.render(
-      scene,
-      camera
-    );
-
-  }
-);
-
-
-/* =========================================================
-   WINDOW RESIZE
-   ========================================================= */
-
-window.addEventListener(
-  'resize',
-  () => {
-
-    camera.aspect =
-      window.innerWidth /
-      window.innerHeight;
-
-    camera.updateProjectionMatrix();
-
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(
       window.innerWidth,
       window.innerHeight
     );
 
-  }
-);
+    renderer.xr.enabled = true;
 
-</script>
+    document.body.appendChild(renderer.domElement);
+
+
+    /* =========================================================
+      MIXER MODEL
+      ========================================================= */
+
+    const loader = new GLTFLoader();
+
+    let mixerModel = null;
+
+    loader.load(
+      './models/mixer.glb',
+
+      (gltf) => {
+
+        mixerModel = gltf.scene;
+
+        mixerModel.scale.set(
+          0.2,
+          0.2,
+          0.2
+        );
+        
+        mixerModel.rotation.set(
+          45,
+          Math.PI,
+          0
+        );
+
+        mixerModel.visible = false;
+
+        scene.add(mixerModel);
+
+        // Basic lighting for the 3D model
+        const ambientLight = new THREE.AmbientLight(
+          0xffffff,
+          2
+        );
+
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(
+          0xffffff,
+          2
+        );
+
+        directionalLight.position.set(
+          2,
+          4,
+          2
+        );
+
+        scene.add(directionalLight);
+
+        alert('Mixer loaded');
+
+      },
+
+      undefined,
+
+      (error) => {
+
+        alert(
+          'Mixer loading error:',
+          error
+        );
+
+      }
+    );
+
+
+    /* =========================================================
+      PLACEMENT RETICLE
+      ========================================================= */
+
+    const reticleGeometry =
+      new THREE.RingGeometry(
+        0.08,
+        0.1,
+        32
+      );
+
+    const reticleMaterial =
+      new THREE.MeshBasicMaterial({
+        color: 0x00ff00
+      });
+
+    const reticle =
+      new THREE.Mesh(
+        reticleGeometry,
+        reticleMaterial
+      );
+
+    reticle.rotation.x = -Math.PI / 2;
+
+    reticle.matrixAutoUpdate = false;
+    reticle.visible = false;
+
+    scene.add(reticle);
+
+
+    /* =========================================================
+      WEBXR AR BUTTON
+      ========================================================= */
+
+    const arButton =
+      ARButton.createButton(
+        renderer,
+        {
+          requiredFeatures: ['hit-test']
+        }
+      );
+
+    document.body.appendChild(arButton);
+
+
+    /* =========================================================
+      HIT-TEST VARIABLES
+      ========================================================= */
+
+    let hitTestSource = null;
+    let hitTestSourceRequested = false;
+
+    let dragging = false;
+    let dragHitTestSource = null;
+    let inputSource = null;
+
+
+    /* =========================================================
+      TAP TO PLACE
+      ========================================================= */
+
+    function onSelect() {
+
+      if (!reticle.visible || !mixerModel) {
+        return;
+      }
+
+      // Only allow the first tap to place the mixer.
+      if (mixerModel.visible) {
+        return;
+      }
+
+      mixerModel.position.setFromMatrixPosition(
+        reticle.matrix
+      );
+
+      mixerModel.visible = true;
+
+    }
+
+
+    renderer.xr.addEventListener(
+      'sessionend',
+      () => {
+
+        hitTestSource = null;
+        hitTestSourceRequested = false;
+        dragging = false;
+        dragHitTestSource = null;
+        inputSource = null;
+
+        reticle.visible = false;
+
+        if (mixerModel) {
+          mixerModel.visible = false;
+        }
+
+      }
+    );
+
+
+    /* =========================================================
+      TAP EVENT
+      ========================================================= */
+
+    renderer.xr.addEventListener(
+      'sessionstart',
+      () => {
+
+        const session = renderer.xr.getSession();
+
+        session.addEventListener(
+          'selectstart',
+          (event) => {
+
+            const inputSource = event.inputSource;
+
+            console.log(
+              'SELECT START',
+              'targetRayMode:',
+              inputSource.targetRayMode,
+              'handedness:',
+              inputSource.handedness,
+              'targetRaySpace:',
+              inputSource.targetRaySpace
+            );
+
+          }
+        );
+
+        session.addEventListener(
+          'selectend',
+          (event) => {
+
+            const inputSource = event.inputSource;
+
+            console.log(
+              'SELECT END',
+              'targetRayMode:',
+              inputSource.targetRayMode,
+              'handedness:',
+              inputSource.handedness
+            );
+
+          }
+        );
+
+        session.addEventListener(
+          'select',
+          onSelect
+        );
+
+      }
+    );
+
+
+    /* =========================================================
+      ANIMATION LOOP
+      ========================================================= */
+
+    renderer.setAnimationLoop(
+      (timestamp, frame) => {
+
+        if (frame) {
+
+          const session =
+            renderer.xr.getSession();
+
+          if (!hitTestSourceRequested) {
+
+            session.requestReferenceSpace(
+              'viewer'
+            ).then((referenceSpace) => {
+
+              session.requestHitTestSource({
+                space: referenceSpace
+              }).then((source) => {
+
+                hitTestSource = source;
+
+              });
+
+            });
+
+            hitTestSourceRequested = true;
+          }
+
+
+          if (hitTestSource) {
+
+            const referenceSpace =
+              renderer.xr.getReferenceSpace();
+
+            const hitTestResults =
+              frame.getHitTestResults(
+                hitTestSource
+              );
+
+            if (hitTestResults.length > 0) {
+
+              const hit =
+                hitTestResults[0];
+
+              const pose =
+                hit.getPose(referenceSpace);
+
+              reticle.visible = true;
+
+              reticle.matrix.fromArray(
+                pose.transform.matrix
+              );
+
+            } else {
+
+              reticle.visible = false;
+
+            }
+
+          }
+
+          if (
+            dragging &&
+            dragHitTestSource
+          ) {
+
+            const referenceSpace =
+              renderer.xr.getReferenceSpace();
+
+            const dragResults =
+              frame.getHitTestResults(
+                dragHitTestSource
+              );
+
+            if (dragResults.length > 0) {
+
+              const hit =
+                dragResults[0];
+
+              const pose =
+                hit.getPose(referenceSpace);
+
+              mixerModel.position.set(
+                pose.transform.position.x,
+                pose.transform.position.y,
+                pose.transform.position.z
+              );
+
+            }
+
+          }
+
+        }
+
+        renderer.render(
+          scene,
+          camera
+        );
+
+      }
+    );
+
+
+    /* =========================================================
+      WINDOW RESIZE
+      ========================================================= */
+
+    window.addEventListener(
+      'resize',
+      () => {
+
+        // Do not change renderer size
+        // while an immersive AR session is active.
+        if (renderer.xr.isPresenting) {
+          return;
+        }
+
+        camera.aspect =
+          window.innerWidth /
+          window.innerHeight;
+
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(
+          window.innerWidth,
+          window.innerHeight
+        );
+
+      }
+    );
+
+  </script>
 
 </body>
 </html>
