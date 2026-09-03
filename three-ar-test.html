@@ -105,7 +105,6 @@
 
     const MIXER_TILT_X = -40 * (Math.PI / 180);
     const MONITOR_SCALE = 0.2;
-    const MONITOR_TILT_X = -40 * (Math.PI / 180);
 
     /* ---- Mixer ---- */
 
@@ -158,8 +157,8 @@
         leftModel.scale.set(MONITOR_SCALE, MONITOR_SCALE, MONITOR_SCALE);
         rightModel.scale.set(MONITOR_SCALE, MONITOR_SCALE, MONITOR_SCALE);
 
-        leftModel.rotation.set(MONITOR_TILT_X, 0, 0);
-        rightModel.rotation.set(MONITOR_TILT_X, 0, 0);
+        leftModel.rotation.set(0, 0, 0);
+        rightModel.rotation.set(0, 0, 0);
 
         leftMonitorGroup = new THREE.Group();
         leftMonitorGroup.add(leftModel);
