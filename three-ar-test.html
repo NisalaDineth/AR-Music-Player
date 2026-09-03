@@ -73,17 +73,44 @@
 
     document.body.appendChild(renderer.domElement);
 
+    // Shared lighting - added once, illuminates every model.
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+    directionalLight.position.set(2, 4, 2);
+    scene.add(directionalLight);
+
 
     /* =========================================================
-      MIXER MODEL
+      PLACEABLE-OBJECT REGISTRY
+      ========================================================= */
+
+    // Every placeable object is a Group (handles position + Y turn)
+    // wrapping the loaded model (handles scale + any built-in tilt).
+    // This keeps the two rotations on separate objects so Euler-axis
+    // interaction can't bleed into other axes - the same fix that was
+    // applied to the mixer.
+    const placeables = [];
+
+    let selectedPlaceable = null;  // chosen via menu button; receives the next tap-to-place
+    let draggingObject = null;     // the placeable currently being dragged
+
+
+    /* =========================================================
+      MODELS
       ========================================================= */
 
     const loader = new GLTFLoader();
 
+    const MIXER_TILT_X = -40 * (Math.PI / 180);
+    const MONITOR_SCALE = 0.2;
+    const MONITOR_TILT_X = -40 * (Math.PI / 180);
+
+    /* ---- Mixer ---- */
+
     let mixerGroup = null;
     let mixerModel = null;
-
-    const MIXER_TILT_X = -40 * (Math.PI / 180);
 
     loader.load(
       './models/mixer.glb',
@@ -92,20 +119,9 @@
 
         mixerModel = gltf.scene;
 
-        mixerModel.scale.set(
-          0.17,
-          0.17,
-          0.17
-        );
+        mixerModel.scale.set(0.17, 0.17, 0.17);
 
-        // The tilt lives on the model itself; the Y turn lives on the
-        // parent group. Nesting them keeps the two rotations on separate
-        // objects so Euler-axis interaction can't bleed into other axes.
-        mixerModel.rotation.set(
-          MIXER_TILT_X,
-          0,
-          0
-        );
+        mixerModel.rotation.set(MIXER_TILT_X, 0, 0);
 
         mixerGroup = new THREE.Group();
         mixerGroup.add(mixerModel);
@@ -113,26 +129,7 @@
 
         scene.add(mixerGroup);
 
-        // Basic lighting for the 3D model
-        const ambientLight = new THREE.AmbientLight(
-          0xffffff,
-          2
-        );
-
-        scene.add(ambientLight);
-
-        const directionalLight = new THREE.DirectionalLight(
-          0xffffff,
-          2
-        );
-
-        directionalLight.position.set(
-          2,
-          4,
-          2
-        );
-
-        scene.add(directionalLight);
+        placeables.push(mixerGroup);
 
         alert('Mixer loaded');
 
@@ -141,42 +138,40 @@
       undefined,
 
       (error) => {
-
-        alert(
-          'Mixer loading error:',
-          error
-        );
-
+        alert('Mixer loading error:', error);
       }
     );
 
-    /* =========================================================
-      LEFT / RIGHT MONITOR MODELS
-      ========================================================= */
+    /* ---- Left / Right Monitors ---- */
 
-    let leftMonitor = null;
-    let rightMonitor = null;
+    let leftMonitorGroup = null;
+    let rightMonitorGroup = null;
 
     loader.load(
       './models/monitor.glb',
 
       (gltf) => {
 
-        // Create two independent copies from the same model.
-        leftMonitor = gltf.scene;
+        const leftModel = gltf.scene;
+        const rightModel = gltf.scene.clone(true);
 
-        rightMonitor = gltf.scene.clone(true);
+        leftModel.scale.set(MONITOR_SCALE, MONITOR_SCALE, MONITOR_SCALE);
+        rightModel.scale.set(MONITOR_SCALE, MONITOR_SCALE, MONITOR_SCALE);
 
-        // Adjust these later if the monitor is too large/small.
-        leftMonitor.scale.set(0.2, 0.2, 0.2);
-        rightMonitor.scale.set(0.2, 0.2, 0.2);
+        leftModel.rotation.set(MONITOR_TILT_X, 0, 0);
+        rightModel.rotation.set(MONITOR_TILT_X, 0, 0);
 
-        // Hide until we place them in AR.
-        leftMonitor.visible = false;
-        rightMonitor.visible = false;
+        leftMonitorGroup = new THREE.Group();
+        leftMonitorGroup.add(leftModel);
+        leftMonitorGroup.visible = false;
+        scene.add(leftMonitorGroup);
+        placeables.push(leftMonitorGroup);
 
-        scene.add(leftMonitor);
-        scene.add(rightMonitor);
+        rightMonitorGroup = new THREE.Group();
+        rightMonitorGroup.add(rightModel);
+        rightMonitorGroup.visible = false;
+        scene.add(rightMonitorGroup);
+        placeables.push(rightMonitorGroup);
 
         console.log('Left and right monitors loaded');
 
@@ -189,48 +184,39 @@
       }
     );
 
+
     /* =========================================================
-      BUTTONS TO PLACE MONITOR MODELS
+      MENU BUTTONS - SELECT WHICH OBJECT TO PLACE
       ========================================================= */
 
-    let objectToPlace = null;
-
     document.getElementById('placeMixerBtn').addEventListener('click', () => {
-      objectToPlace = mixerModel;
+      selectedPlaceable = mixerGroup;
       console.log('Placement mode: MIXER');
     });
 
     document.getElementById('placeLeftBtn').addEventListener('click', () => {
-      objectToPlace = leftMonitor;
+      selectedPlaceable = leftMonitorGroup;
       console.log('Placement mode: LEFT MONITOR');
     });
 
     document.getElementById('placeRightBtn').addEventListener('click', () => {
-      objectToPlace = rightMonitor;
+      selectedPlaceable = rightMonitorGroup;
       console.log('Placement mode: RIGHT MONITOR');
     });
+
 
     /* =========================================================
       PLACEMENT RETICLE
       ========================================================= */
 
     const reticleGeometry =
-      new THREE.RingGeometry(
-        0.08,
-        0.1,
-        32
-      );
+      new THREE.RingGeometry(0.08, 0.1, 32);
 
     const reticleMaterial =
-      new THREE.MeshBasicMaterial({
-        color: 0x00ff00
-      });
+      new THREE.MeshBasicMaterial({ color: 0x00ff00 });
 
     const reticle =
-      new THREE.Mesh(
-        reticleGeometry,
-        reticleMaterial
-      );
+      new THREE.Mesh(reticleGeometry, reticleMaterial);
 
     reticle.rotation.x = -Math.PI / 2;
 
@@ -260,22 +246,10 @@
       domOverlay: { root: arOverlay }
     });
 
-    // Keep the built-in Start/Stop AR button outside the overlay root.
-    // It only needs to be visible before the session starts (to enter
-    // AR) - nesting it inside the overlay caused it to get left in a
-    // broken state after ending a session, since its own "STOP AR" /
-    // "START AR" toggle is tied to the overlay root's fullscreen
-    // lifecycle. Instead, we use a plain, independent button (below)
-    // purely to exit the session while inside AR.
     document.body.appendChild(arButton);
 
     const arExitBtn = document.getElementById('arExitBtn');
 
-    // Set this inline (not just in CSS) so the button is guaranteed to
-    // stay clickable even if the stylesheet hasn't loaded yet, or a
-    // stale cached copy without this rule is being served - arOverlay
-    // itself has pointer-events:none, so without this the button would
-    // silently inherit that and never receive taps.
     arExitBtn.style.pointerEvents = 'auto';
 
     arExitBtn.addEventListener('click', () => {
@@ -298,16 +272,12 @@
     let hitTestSource = null;
     let hitTestSourceRequested = false;
 
-    // Screen-tap ("transient") inputs can't be used with the regular
-    // requestHitTestSource({space}) call - they need this dedicated API.
     let transientHitTestSource = null;
     let transientHitTestSourceRequested = false;
 
-    // Drag state.
-    let dragging = false;
-    let activeInputSource = null;   // The input source currently pressed down (selectstart -> selectend).
-    let pressStartTime = 0;         // performance.now() timestamp of the current press.
-    let justFinishedDrag = false;   // Suppresses tap-to-place right after a drag ends.
+    let activeInputSource = null;
+    let pressStartTime = 0;
+    let justFinishedDrag = false;
 
     const LONG_PRESS_DURATION_MS = 500;
 
@@ -322,45 +292,51 @@
 
       // If this tap/release is actually the end of a drag gesture, it's
       // already been handled by the drag logic in the render loop -
-      // ignore it here so the mixer doesn't jump back to the reticle.
+      // ignore it here so the object doesn't jump back to the reticle.
       if (justFinishedDrag) {
         justFinishedDrag = false;
         return;
       }
 
-      if (!reticle.visible || !mixerModel) {
+      if (!reticle.visible || !selectedPlaceable) {
         return;
       }
 
-      // Only allow the first tap to place the mixer. Once placed, a
-      // plain tap does nothing - moving it requires a long press + drag.
-      if (mixerGroup.visible) {
+      // Only allow the first tap to place the selected object. Once
+      // placed, moving it requires a long press + drag.
+      if (selectedPlaceable.visible) {
         return;
       }
 
-      mixerGroup.position.setFromMatrixPosition(
-        reticle.matrix
-      );
+      placeAtReticle(selectedPlaceable);
 
-      // Turn the mixer to face the camera on the horizontal plane.
-      // The Y turn lives on the group; the built-in tilt lives on the
-      // model itself, so the two rotations can't interact.
-      const cameraPos = camera.getWorldPosition(
-        new THREE.Vector3()
-      );
+    }
+
+    // Places a placeable group at the reticle position and turns it to
+    // face the camera. The Y turn lives on the group; any built-in
+    // tilt lives on the child model, so the two rotations can't
+    // interact.
+    function placeAtReticle(group) {
+
+      group.position.setFromMatrixPosition(reticle.matrix);
+
+      faceCamera(group);
+
+      group.visible = true;
+
+    }
+
+    // Rotates a group to face the camera on the horizontal plane.
+    function faceCamera(group) {
+
+      const cameraPos = camera.getWorldPosition(new THREE.Vector3());
 
       const angle = Math.atan2(
-        cameraPos.x - mixerGroup.position.x,
-        cameraPos.z - mixerGroup.position.z
+        cameraPos.x - group.position.x,
+        cameraPos.z - group.position.z
       );
 
-      mixerGroup.rotation.set(
-        0,
-        angle,
-        0
-      );
-
-      mixerGroup.visible = true;
+      group.rotation.set(0, angle, 0);
 
     }
 
@@ -369,8 +345,6 @@
       LONG-PRESS-TO-DRAG HELPERS
       ========================================================= */
 
-    // Builds a world-space ray from an XRInputSource's target ray, so we
-    // can test whether it is currently pointing at the mixer model.
     function getInputSourceRay(inputSource, frame, referenceSpace) {
 
       const pose = frame.getPose(
@@ -412,17 +386,17 @@
         transientHitTestSource = null;
         transientHitTestSourceRequested = false;
 
-        dragging = false;
         activeInputSource = null;
         justFinishedDrag = false;
+        draggingObject = null;
+        selectedPlaceable = null;
 
         reticle.visible = false;
 
-        if (mixerGroup) {
-          mixerGroup.visible = false;
-        }
+        placeables.forEach((group) => {
+          group.visible = false;
+        });
 
-        // Hide the placement menu again once we leave the AR session.
         const objectMenu = document.getElementById('objectMenu');
         objectMenu.style.display = 'none';
         document.body.appendChild(objectMenu);
@@ -444,9 +418,6 @@
 
         const session = renderer.xr.getSession();
 
-        // Reveal the placement menu now that we're inside the AR camera
-        // view. It's hidden by default via CSS (display: none) so it
-        // doesn't show up on the regular 2D page before AR starts.
         const objectMenu = document.getElementById('objectMenu');
         arOverlay.appendChild(objectMenu);
         objectMenu.style.display = 'flex';
@@ -461,47 +432,22 @@
 
             const inputSource = event.inputSource;
 
-            console.log(
-              'SELECT START',
-              'targetRayMode:',
-              inputSource.targetRayMode,
-              'handedness:',
-              inputSource.handedness,
-              'targetRaySpace:',
-              inputSource.targetRaySpace
-            );
-
-            // Start tracking this press so the animation loop can detect
-            // a long press on the mixer model.
             activeInputSource = inputSource;
             pressStartTime = performance.now();
-            dragging = false;
+            draggingObject = null;
 
           }
         );
 
         session.addEventListener(
           'selectend',
-          (event) => {
+          () => {
 
-            const inputSource = event.inputSource;
-
-            console.log(
-              'SELECT END',
-              'targetRayMode:',
-              inputSource.targetRayMode,
-              'handedness:',
-              inputSource.handedness
-            );
-
-            // If we were dragging, drop the mixer where it currently is
-            // and swallow the upcoming 'select' event so it doesn't
-            // re-trigger tap-to-place.
-            if (dragging) {
+            if (draggingObject) {
               justFinishedDrag = true;
             }
 
-            dragging = false;
+            draggingObject = null;
             activeInputSource = null;
 
           }
@@ -525,24 +471,18 @@
 
         if (frame) {
 
-          const session =
-            renderer.xr.getSession();
+          const session = renderer.xr.getSession();
 
-          const referenceSpace =
-            renderer.xr.getReferenceSpace();
+          const referenceSpace = renderer.xr.getReferenceSpace();
 
           if (!hitTestSourceRequested) {
 
-            session.requestReferenceSpace(
-              'viewer'
-            ).then((viewerSpace) => {
+            session.requestReferenceSpace('viewer').then((viewerSpace) => {
 
               session.requestHitTestSource({
                 space: viewerSpace
               }).then((source) => {
-
                 hitTestSource = source;
-
               });
 
             });
@@ -555,39 +495,36 @@
             session.requestHitTestSourceForTransientInput({
               profile: 'generic-touchscreen'
             }).then((source) => {
-
               transientHitTestSource = source;
-
             }).catch((error) => {
-
               console.error(
                 'Transient hit test subscription failed',
                 error
               );
-
             });
 
             transientHitTestSourceRequested = true;
           }
 
 
-          // Placement reticle: only shown before the mixer has been
-          // placed. Once placed, relocating it is done via long-press
-          // + drag instead of the look-and-tap reticle.
-          if (hitTestSource && (!mixerGroup || !mixerGroup.visible)) {
+          // Placement reticle: shown when a selected object hasn't
+          // been placed yet. Once placed, relocating it is done via
+          // long-press + drag instead of the look-and-tap reticle.
+          const showReticle =
+            hitTestSource &&
+            selectedPlaceable &&
+            !selectedPlaceable.visible;
+
+          if (showReticle) {
 
             const hitTestResults =
-              frame.getHitTestResults(
-                hitTestSource
-              );
+              frame.getHitTestResults(hitTestSource);
 
             if (hitTestResults.length > 0) {
 
-              const hit =
-                hitTestResults[0];
+              const hit = hitTestResults[0];
 
-              const pose =
-                hit.getPose(referenceSpace);
+              const pose = hit.getPose(referenceSpace);
 
               reticle.visible = true;
 
@@ -608,18 +545,15 @@
           }
 
 
-          // Long-press detection: while a finger/controller is held down
-          // on top of the already-placed mixer for longer than
+          // Long-press detection: while a finger/controller is held
+          // down on top of an already-placed object for longer than
           // LONG_PRESS_DURATION_MS, enter drag mode.
           if (
             activeInputSource &&
-            !dragging &&
-            mixerGroup &&
-            mixerGroup.visible
+            !draggingObject
           ) {
 
-            const elapsed =
-              performance.now() - pressStartTime;
+            const elapsed = performance.now() - pressStartTime;
 
             if (elapsed >= LONG_PRESS_DURATION_MS) {
 
@@ -631,20 +565,23 @@
 
               if (ray) {
 
-                dragRaycaster.set(
-                  ray.origin,
-                  ray.direction
-                );
+                dragRaycaster.set(ray.origin, ray.direction);
 
-                const intersections =
-                  dragRaycaster.intersectObject(
-                    mixerModel,
-                    true
-                  );
+                // Test against every visible placeable; the first hit
+                // becomes the drag target.
+                for (const group of placeables) {
 
-                if (intersections.length > 0) {
+                  if (!group.visible) continue;
 
-                  dragging = true;
+                  const intersections =
+                    dragRaycaster.intersectObject(group, true);
+
+                  if (intersections.length > 0) {
+
+                    draggingObject = group;
+                    break;
+
+                  }
 
                 }
 
@@ -655,10 +592,10 @@
           }
 
 
-          // While dragging, move the mixer to follow the surface point
-          // under the finger/controller each frame.
+          // While dragging, move the object to follow the surface
+          // point under the finger/controller each frame.
           if (
-            dragging &&
+            draggingObject &&
             transientHitTestSource &&
             activeInputSource
           ) {
@@ -674,35 +611,17 @@
 
             if (match && match.results.length > 0) {
 
-              const hit =
-                match.results[0];
+              const hit = match.results[0];
 
-              const pose =
-                hit.getPose(referenceSpace);
+              const pose = hit.getPose(referenceSpace);
 
-              mixerGroup.position.set(
+              draggingObject.position.set(
                 pose.transform.position.x,
                 pose.transform.position.y,
                 pose.transform.position.z
               );
 
-              // Turn the mixer to face the camera on the horizontal
-              // plane. The Y turn lives on the group; the built-in tilt
-              // lives on the model, so they can't interact.
-              const cameraPos = camera.getWorldPosition(
-                new THREE.Vector3()
-              );
-
-              const angle = Math.atan2(
-                cameraPos.x - mixerGroup.position.x,
-                cameraPos.z - mixerGroup.position.z
-              );
-
-              mixerGroup.rotation.set(
-                0,
-                angle,
-                0
-              );
+              faceCamera(draggingObject);
 
             }
 
@@ -710,10 +629,7 @@
 
         }
 
-        renderer.render(
-          scene,
-          camera
-        );
+        renderer.render(scene, camera);
 
       }
     );
@@ -727,15 +643,12 @@
       'resize',
       () => {
 
-        // Do not change renderer size
-        // while an immersive AR session is active.
         if (renderer.xr.isPresenting) {
           return;
         }
 
         camera.aspect =
-          window.innerWidth /
-          window.innerHeight;
+          window.innerWidth / window.innerHeight;
 
         camera.updateProjectionMatrix();
 
