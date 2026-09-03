@@ -6,6 +6,8 @@
 
   <title>Three.js AR Test</title>
 
+  <link rel="stylesheet" href="./css/style.css">
+
   <style>
     body {
       margin: 0;
@@ -15,6 +17,13 @@
 </head>
 
 <body>
+  <div id="objectMenu">
+    <button id="placeMixerBtn">PLACE MIXER</button>
+    <button id="placeLeftBtn">PLACE LEFT MONITOR</button>
+    <button id="placeRightBtn">PLACE RIGHT MONITOR</button>
+  </div>
+
+  <button id="arExitBtn" aria-label="Stop AR">✕</button>
   
   <script type="importmap">
   {
@@ -133,6 +142,65 @@
       }
     );
 
+    /* =========================================================
+      LEFT / RIGHT MONITOR MODELS
+      ========================================================= */
+
+    let leftMonitor = null;
+    let rightMonitor = null;
+
+    loader.load(
+      './models/monitor.glb',
+
+      (gltf) => {
+
+        // Create two independent copies from the same model.
+        leftMonitor = gltf.scene;
+
+        rightMonitor = gltf.scene.clone(true);
+
+        // Adjust these later if the monitor is too large/small.
+        leftMonitor.scale.set(0.2, 0.2, 0.2);
+        rightMonitor.scale.set(0.2, 0.2, 0.2);
+
+        // Hide until we place them in AR.
+        leftMonitor.visible = false;
+        rightMonitor.visible = false;
+
+        scene.add(leftMonitor);
+        scene.add(rightMonitor);
+
+        console.log('Left and right monitors loaded');
+
+      },
+
+      undefined,
+
+      (error) => {
+        console.error('Monitor loading error:', error);
+      }
+    );
+
+    /* =========================================================
+      BUTTONS TO PLACE MONITOR MODELS
+      ========================================================= */
+
+    let objectToPlace = null;
+
+    document.getElementById('placeMixerBtn').addEventListener('click', () => {
+      objectToPlace = mixerModel;
+      console.log('Placement mode: MIXER');
+    });
+
+    document.getElementById('placeLeftBtn').addEventListener('click', () => {
+      objectToPlace = leftMonitor;
+      console.log('Placement mode: LEFT MONITOR');
+    });
+
+    document.getElementById('placeRightBtn').addEventListener('click', () => {
+      objectToPlace = rightMonitor;
+      console.log('Placement mode: RIGHT MONITOR');
+    });
 
     /* =========================================================
       PLACEMENT RETICLE
@@ -168,15 +236,51 @@
       WEBXR AR BUTTON
       ========================================================= */
 
-    const arButton =
-      ARButton.createButton(
-        renderer,
-        {
-          requiredFeatures: ['hit-test']
-        }
-      );
+    const arOverlay = document.createElement('div');
 
+    arOverlay.id = 'arOverlay';
+    arOverlay.style.position = 'fixed';
+    arOverlay.style.inset = '0';
+    arOverlay.style.pointerEvents = 'none';
+    arOverlay.style.zIndex = '1';
+
+    document.body.appendChild(arOverlay);
+
+    const arButton = ARButton.createButton(renderer, {
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay'],
+      domOverlay: { root: arOverlay }
+    });
+
+    // Keep the built-in Start/Stop AR button outside the overlay root.
+    // It only needs to be visible before the session starts (to enter
+    // AR) - nesting it inside the overlay caused it to get left in a
+    // broken state after ending a session, since its own "STOP AR" /
+    // "START AR" toggle is tied to the overlay root's fullscreen
+    // lifecycle. Instead, we use a plain, independent button (below)
+    // purely to exit the session while inside AR.
     document.body.appendChild(arButton);
+
+    const arExitBtn = document.getElementById('arExitBtn');
+
+    // Set this inline (not just in CSS) so the button is guaranteed to
+    // stay clickable even if the stylesheet hasn't loaded yet, or a
+    // stale cached copy without this rule is being served - arOverlay
+    // itself has pointer-events:none, so without this the button would
+    // silently inherit that and never receive taps.
+    arExitBtn.style.pointerEvents = 'auto';
+
+    arExitBtn.addEventListener('click', () => {
+
+      const session = renderer.xr.getSession();
+
+      console.log('Exit button clicked, session:', session);
+
+      if (session) {
+        session.end();
+      }
+
+    });
 
 
     /* =========================================================
@@ -270,6 +374,8 @@
       'sessionend',
       () => {
 
+        console.log('AR SESSION ENDED');
+
         hitTestSource = null;
         hitTestSourceRequested = false;
 
@@ -290,6 +396,14 @@
           mixerModel.visible = false;
         }
 
+        // Hide the placement menu again once we leave the AR session.
+        const objectMenu = document.getElementById('objectMenu');
+        objectMenu.style.display = 'none';
+        document.body.appendChild(objectMenu);
+
+        arExitBtn.style.display = 'none';
+        document.body.appendChild(arExitBtn);
+
       }
     );
 
@@ -303,6 +417,17 @@
       () => {
 
         const session = renderer.xr.getSession();
+
+        // Reveal the placement menu now that we're inside the AR camera
+        // view. It's hidden by default via CSS (display: none) so it
+        // doesn't show up on the regular 2D page before AR starts.
+        const objectMenu = document.getElementById('objectMenu');
+        arOverlay.appendChild(objectMenu);
+        objectMenu.style.display = 'flex';
+        objectMenu.style.pointerEvents = 'auto';
+
+        arOverlay.appendChild(arExitBtn);
+        arExitBtn.style.display = 'block';
 
         session.addEventListener(
           'selectstart',
