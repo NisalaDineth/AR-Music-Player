@@ -80,7 +80,10 @@
 
     const loader = new GLTFLoader();
 
+    let mixerGroup = null;
     let mixerModel = null;
+
+    const MIXER_TILT_X = -40 * (Math.PI / 180);
 
     loader.load(
       './models/mixer.glb',
@@ -94,16 +97,21 @@
           0.17,
           0.17
         );
-        
+
+        // The tilt lives on the model itself; the Y turn lives on the
+        // parent group. Nesting them keeps the two rotations on separate
+        // objects so Euler-axis interaction can't bleed into other axes.
         mixerModel.rotation.set(
-          -40 * (Math.PI / 180),
-          0 * (Math.PI / 180),
-          0 * (Math.PI / 180)
+          MIXER_TILT_X,
+          0,
+          0
         );
 
-        mixerModel.visible = false;
+        mixerGroup = new THREE.Group();
+        mixerGroup.add(mixerModel);
+        mixerGroup.visible = false;
 
-        scene.add(mixerModel);
+        scene.add(mixerGroup);
 
         // Basic lighting for the 3D model
         const ambientLight = new THREE.AmbientLight(
@@ -326,15 +334,33 @@
 
       // Only allow the first tap to place the mixer. Once placed, a
       // plain tap does nothing - moving it requires a long press + drag.
-      if (mixerModel.visible) {
+      if (mixerGroup.visible) {
         return;
       }
 
-      mixerModel.position.setFromMatrixPosition(
+      mixerGroup.position.setFromMatrixPosition(
         reticle.matrix
       );
 
-      mixerModel.visible = true;
+      // Turn the mixer to face the camera on the horizontal plane.
+      // The Y turn lives on the group; the built-in tilt lives on the
+      // model itself, so the two rotations can't interact.
+      const cameraPos = camera.getWorldPosition(
+        new THREE.Vector3()
+      );
+
+      const angle = Math.atan2(
+        cameraPos.x - mixerGroup.position.x,
+        cameraPos.z - mixerGroup.position.z
+      );
+
+      mixerGroup.rotation.set(
+        0,
+        angle,
+        0
+      );
+
+      mixerGroup.visible = true;
 
     }
 
@@ -392,8 +418,8 @@
 
         reticle.visible = false;
 
-        if (mixerModel) {
-          mixerModel.visible = false;
+        if (mixerGroup) {
+          mixerGroup.visible = false;
         }
 
         // Hide the placement menu again once we leave the AR session.
@@ -548,7 +574,7 @@
           // Placement reticle: only shown before the mixer has been
           // placed. Once placed, relocating it is done via long-press
           // + drag instead of the look-and-tap reticle.
-          if (hitTestSource && (!mixerModel || !mixerModel.visible)) {
+          if (hitTestSource && (!mixerGroup || !mixerGroup.visible)) {
 
             const hitTestResults =
               frame.getHitTestResults(
@@ -588,8 +614,8 @@
           if (
             activeInputSource &&
             !dragging &&
-            mixerModel &&
-            mixerModel.visible
+            mixerGroup &&
+            mixerGroup.visible
           ) {
 
             const elapsed =
@@ -654,10 +680,28 @@
               const pose =
                 hit.getPose(referenceSpace);
 
-              mixerModel.position.set(
+              mixerGroup.position.set(
                 pose.transform.position.x,
                 pose.transform.position.y,
                 pose.transform.position.z
+              );
+
+              // Turn the mixer to face the camera on the horizontal
+              // plane. The Y turn lives on the group; the built-in tilt
+              // lives on the model, so they can't interact.
+              const cameraPos = camera.getWorldPosition(
+                new THREE.Vector3()
+              );
+
+              const angle = Math.atan2(
+                cameraPos.x - mixerGroup.position.x,
+                cameraPos.z - mixerGroup.position.z
+              );
+
+              mixerGroup.rotation.set(
+                0,
+                angle,
+                0
               );
 
             }
