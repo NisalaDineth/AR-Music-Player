@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spatial Audio Test</title>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #111;
+    }
+
+    #info {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      right: 15px;
+      z-index: 10;
+      padding: 15px;
+      background: rgba(0, 0, 0, 0.75);
+      color: white;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    #playBtn {
+      position: fixed;
+      left: 50%;
+      bottom: 30px;
+      transform: translateX(-50%);
+      z-index: 20;
+
+      padding: 15px 30px;
+      border: none;
+      border-radius: 10px;
+
+      background: white;
+      color: black;
+
+      font-size: 18px;
+      font-weight: bold;
+
+      pointer-events: auto;
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+
+<body>
+
+  <div id="info">
+    <strong>Spatial Audio Test</strong><br>
+    1. Start AR<br>
+    2. Point at a real surface<br>
+    3. Tap the green reticle to place the speaker<br>
+    4. Press PLAY<br>
+    5. Move around the speaker
+  </div>
+
+  <button id="playBtn">PLAY SPATIAL AUDIO</button>
+
+  <script type="module">
+
+    import * as THREE from
+        'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+    import { ARButton } from
+        'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/ARButton.js';
+
+    import { GLTFLoader } from
+        'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+
+
+    // =========================================================
+    // THREE.JS
+    // =========================================================
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(
+      70,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      20
+    );
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true
+    });
+
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(
+      window.innerWidth,
+      window.innerHeight
+    );
+
+    renderer.xr.enabled = true;
+
+    document.body.appendChild(
+      renderer.domElement
+    );
+
+
+    // =========================================================
+    // LIGHTING
+    // =========================================================
+
+    const ambientLight =
+      new THREE.AmbientLight(
+        0xffffff,
+        2
+      );
+
+    scene.add(ambientLight);
+
+
+    const directionalLight =
+      new THREE.DirectionalLight(
+        0xffffff,
+        2
+      );
+
+    directionalLight.position.set(
+      2,
+      4,
+      2
+    );
+
+    scene.add(directionalLight);
+
+
+    // =========================================================
+    // VISUAL SPEAKER
+    // =========================================================
+
+    // =========================================================
+    // VISUAL SPEAKER — MONITOR MODEL
+    // =========================================================
+
+    const loader = new GLTFLoader();
+
+    let speaker = null;
+
+    loader.load(
+    './models/monitor.glb',
+
+    (gltf) => {
+
+        speaker = gltf.scene;
+
+        // Keep the same scale used in your main AR project
+        speaker.scale.set(
+        0.2,
+        0.2,
+        0.2
+        );
+
+        speaker.visible = false;
+
+        scene.add(speaker);
+
+        console.log('Monitor loaded successfully');
+
+    },
+
+    undefined,
+
+    (error) => {
+
+        console.error(
+        'Monitor loading error:',
+        error
+        );
+
+        alert(
+        'Could not load monitor.glb'
+        );
+    }
+    );
+
+
+    // =========================================================
+    // RETICLE
+    // =========================================================
+
+    const reticleGeometry =
+      new THREE.RingGeometry(
+        0.08,
+        0.1,
+        32
+      );
+
+    const reticleMaterial =
+      new THREE.MeshBasicMaterial({
+        color: 0x00ff00
+      });
+
+    const reticle =
+      new THREE.Mesh(
+        reticleGeometry,
+        reticleMaterial
+      );
+
+    reticle.rotation.x =
+      -Math.PI / 2;
+
+    reticle.matrixAutoUpdate = false;
+
+    reticle.visible = false;
+
+    scene.add(reticle);
+
+
+    // =========================================================
+    // AR HIT TEST
+    // =========================================================
+
+    let hitTestSource = null;
+    let hitTestSourceRequested = false;
+
+
+    // =========================================================
+    // AUDIO VARIABLES
+    // =========================================================
+
+    let audioContext = null;
+    let audioElement = null;
+    let sourceNode = null;
+    let pannerNode = null;
+
+
+    // =========================================================
+    // CREATE SPATIAL AUDIO
+    // =========================================================
+
+    function createSpatialAudio() {
+
+      audioContext =
+        new AudioContext();
+
+
+      audioElement =
+        new Audio(
+          './audio/song1.mp3'
+        );
+
+      audioElement.loop = true;
+
+
+      sourceNode =
+        audioContext.createMediaElementSource(
+          audioElement
+        );
+
+
+      pannerNode =
+        audioContext.createPanner();
+
+
+      // HRTF spatial audio
+      pannerNode.panningModel =
+        'HRTF';
+
+
+      // Distance attenuation
+      pannerNode.distanceModel =
+        'inverse';
+
+      pannerNode.refDistance = 1;
+
+      pannerNode.maxDistance = 10;
+
+      pannerNode.rolloffFactor = 1;
+
+
+      // Speaker direction
+      pannerNode.coneInnerAngle =
+        60;
+
+      pannerNode.coneOuterAngle =
+        180;
+
+      pannerNode.coneOuterGain =
+        0.3;
+
+
+      // Audio graph
+      sourceNode.connect(
+        pannerNode
+      );
+
+      pannerNode.connect(
+        audioContext.destination
+      );
+
+
+      updatePannerPosition();
+
+
+      console.log(
+        'Spatial audio created'
+      );
+
+      console.log(
+        'Panning:',
+        pannerNode.panningModel
+      );
+
+      console.log(
+        'Distance:',
+        pannerNode.distanceModel
+      );
+    }
+
+
+    // =========================================================
+    // UPDATE AUDIO SOURCE POSITION
+    // =========================================================
+
+    function updatePannerPosition() {
+
+      if (!pannerNode || !speaker) return;
+
+
+      const position =
+        speaker.getWorldPosition(
+          new THREE.Vector3()
+        );
+
+
+      pannerNode.positionX.value =
+        position.x;
+
+      pannerNode.positionY.value =
+        position.y;
+
+      pannerNode.positionZ.value =
+        position.z;
+    }
+
+
+    // =========================================================
+    // UPDATE AUDIO LISTENER
+    // =========================================================
+
+    function updateAudioListener() {
+
+      if (!audioContext) return;
+
+
+      const listener =
+        audioContext.listener;
+
+
+      const cameraPosition =
+        camera.getWorldPosition(
+          new THREE.Vector3()
+        );
+
+
+      const cameraQuaternion =
+        camera.getWorldQuaternion(
+          new THREE.Quaternion()
+        );
+
+
+      const forward =
+        new THREE.Vector3(
+          0,
+          0,
+          -1
+        );
+
+      forward.applyQuaternion(
+        cameraQuaternion
+      );
+
+
+      const up =
+        new THREE.Vector3(
+          0,
+          1,
+          0
+        );
+
+      up.applyQuaternion(
+        cameraQuaternion
+      );
+
+
+      listener.positionX.value =
+        cameraPosition.x;
+
+      listener.positionY.value =
+        cameraPosition.y;
+
+      listener.positionZ.value =
+        cameraPosition.z;
+
+
+      listener.forwardX.value =
+        forward.x;
+
+      listener.forwardY.value =
+        forward.y;
+
+      listener.forwardZ.value =
+        forward.z;
+
+
+      listener.upX.value =
+        up.x;
+
+      listener.upY.value =
+        up.y;
+
+      listener.upZ.value =
+        up.z;
+    }
+
+
+    // =========================================================
+    // PLACE SPEAKER
+    // =========================================================
+
+    function placeSpeaker() {
+
+      if (!reticle.visible || !speaker) {
+        return;
+      }
+
+
+      speaker.position.setFromMatrixPosition(
+        reticle.matrix
+      );
+
+
+      speaker.visible = true;
+
+
+      // Keep audio source at exactly
+      // the same position as the speaker.
+      updatePannerPosition();
+
+
+      console.log(
+        'Speaker placed at:',
+        speaker.position
+      );
+    }
+
+
+    // =========================================================
+    // PLAY BUTTON
+    // =========================================================
+
+    document
+      .getElementById('playBtn')
+      .addEventListener(
+        'click',
+        async () => {
+
+          try {
+
+            if (!audioContext) {
+              createSpatialAudio();
+            }
+
+
+            if (
+              audioContext.state ===
+              'suspended'
+            ) {
+              await audioContext.resume();
+            }
+
+
+            await audioElement.play();
+
+
+            document.getElementById(
+              'playBtn'
+            ).textContent =
+              'SPATIAL AUDIO PLAYING';
+
+
+          } catch (error) {
+
+            console.error(
+              'Audio error:',
+              error
+            );
+
+            alert(
+              'Could not start audio: ' +
+              error.message
+            );
+          }
+        }
+      );
+
+
+    // =========================================================
+    // AR BUTTON
+    // =========================================================
+
+    const arButton =
+      (() => {
+
+        const arOverlay = document.createElement('div');
+
+        arOverlay.id = 'arOverlay';
+        arOverlay.style.position = 'fixed';
+        arOverlay.style.inset = '0';
+        arOverlay.style.pointerEvents = 'none';
+        arOverlay.style.zIndex = '1';
+
+        document.body.appendChild(arOverlay);
+
+        const playButton = document.getElementById('playBtn');
+
+        const buttonParent = playButton.parentElement;
+
+        renderer.xr.addEventListener(
+          'sessionstart',
+          () => {
+            arOverlay.appendChild(playButton);
+            playButton.style.display = 'block';
+          }
+        );
+
+        renderer.xr.addEventListener(
+          'sessionend',
+          () => {
+            buttonParent.appendChild(playButton);
+            playButton.style.display = 'block';
+          }
+        );
+
+        return ARButton.createButton(
+          renderer,
+          {
+            requiredFeatures: [
+              'hit-test'
+            ],
+            optionalFeatures: [
+              'dom-overlay'
+            ],
+            domOverlay: {
+              root: arOverlay
+            }
+          }
+        );
+      })();
+
+    document.body.appendChild(
+      arButton
+    );
+
+
+    // =========================================================
+    // WEBXR INPUT
+    // =========================================================
+
+    renderer.xr.addEventListener(
+      'sessionstart',
+      () => {
+
+        const session =
+          renderer.xr.getSession();
+
+
+        session.addEventListener(
+          'select',
+          () => {
+
+            placeSpeaker();
+
+          }
+        );
+      }
+    );
+
+
+    // =========================================================
+    // ANIMATION LOOP
+    // =========================================================
+
+    renderer.setAnimationLoop(
+      (
+        timestamp,
+        frame
+      ) => {
+
+        if (frame) {
+
+          const session =
+            renderer.xr.getSession();
+
+
+          const referenceSpace =
+            renderer.xr.getReferenceSpace();
+
+
+          // -----------------------------------------------
+          // Request hit-test source
+          // -----------------------------------------------
+
+          if (
+            session &&
+            !hitTestSourceRequested
+          ) {
+
+            session
+              .requestReferenceSpace(
+                'viewer'
+              )
+              .then(
+                viewerSpace => {
+
+                  session
+                    .requestHitTestSource({
+                      space: viewerSpace
+                    })
+                    .then(
+                      source => {
+
+                        hitTestSource =
+                          source;
+                      }
+                    );
+                }
+              );
+
+
+            hitTestSourceRequested =
+              true;
+          }
+
+
+          // -----------------------------------------------
+          // Get hit-test results
+          // -----------------------------------------------
+
+          if (
+            hitTestSource &&
+            referenceSpace
+          ) {
+
+            const hitTestResults =
+              frame.getHitTestResults(
+                hitTestSource
+              );
+
+
+            if (
+              hitTestResults.length > 0
+            ) {
+
+              const hit =
+                hitTestResults[0];
+
+
+              const pose =
+                hit.getPose(
+                  referenceSpace
+                );
+
+
+              if (pose) {
+
+                reticle.visible =
+                  true;
+
+                reticle.matrix.fromArray(
+                  pose.transform.matrix
+                );
+              }
+
+            } else {
+
+              reticle.visible =
+                false;
+            }
+          }
+        }
+
+
+        // Update spatial audio
+        updatePannerPosition();
+
+        updateAudioListener();
+
+
+        renderer.render(
+          scene,
+          camera
+        );
+      }
+    );
+
+
+    // =========================================================
+    // RESIZE
+    // =========================================================
+
+    window.addEventListener(
+      'resize',
+      () => {
+
+        camera.aspect =
+          window.innerWidth /
+          window.innerHeight;
+
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(
+          window.innerWidth,
+          window.innerHeight
+        );
+      }
+    );
+
+  </script>
+
+</body>
+</html>
