@@ -41,7 +41,7 @@
     #audioStatus {
       position: fixed;
       left: 50%;
-      bottom: 90px;
+      bottom: max(210px, calc(env(safe-area-inset-bottom) + 120px));
       transform: translateX(-50%);
       z-index: 10000;
 
