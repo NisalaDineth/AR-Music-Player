@@ -13,15 +13,43 @@
       margin: 0;
       overflow: hidden;
     }
+
+    #playBtn {
+      position: fixed;
+      left: 50%;
+      bottom: 30px;
+      transform: translateX(-50%);
+      z-index: 10000;
+
+      padding: 14px 28px;
+      border: none;
+      border-radius: 10px;
+
+      background: rgba(255, 255, 255, 0.95);
+      color: #222;
+
+      font-size: 16px;
+      font-weight: bold;
+      font-family: Arial, sans-serif;
+
+      display: none;
+      pointer-events: auto;
+    }
   </style>
 </head>
 
 <body>
+  <nav id="mode-controls" aria-label="AR mode selection">
+    <button id="marker-mode-button" class="mode-button" type="button">MARKER MODE</button>
+    <button id="ar-mode-button" class="mode-button active" type="button">AR MODE</button>
+  </nav>
+
   <div id="objectMenu">
-    <button id="placeMixerBtn">PLACE MIXER</button>
     <button id="placeLeftBtn">PLACE LEFT MONITOR</button>
     <button id="placeRightBtn">PLACE RIGHT MONITOR</button>
   </div>
+
+  <button id="playBtn">PLAY SPATIAL AUDIO</button>
 
   <button id="arExitBtn" aria-label="Stop AR">✕</button>
   
@@ -34,6 +62,20 @@
   </script>
 
   <script type="module">
+
+    document.getElementById('marker-mode-button').addEventListener('click', () => {
+      const session = renderer.xr.getSession();
+
+      if (session) {
+        session.end();
+      }
+
+      window.location.href = './index.html';
+    });
+
+    document.getElementById('ar-mode-button').addEventListener('click', () => {
+      window.location.href = './three-ar-test.html';
+    });
 
     import * as THREE from
       'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -89,8 +131,7 @@
     // Every placeable object is a Group (handles position + Y turn)
     // wrapping the loaded model (handles scale + any built-in tilt).
     // This keeps the two rotations on separate objects so Euler-axis
-    // interaction can't bleed into other axes - the same fix that was
-    // applied to the mixer.
+    // interaction can't bleed into other axes.
     const placeables = [];
 
     let selectedPlaceable = null;  // chosen via menu button; receives the next tap-to-place
@@ -103,44 +144,8 @@
 
     const loader = new GLTFLoader();
 
-    const MIXER_TILT_X = -40 * (Math.PI / 180);
     const MONITOR_SCALE = 0.2;
     const MONITOR_FILL_INTENSITY = 10;
-
-    /* ---- Mixer ---- */
-
-    let mixerGroup = null;
-    let mixerModel = null;
-
-    loader.load(
-      './models/mixer.glb',
-
-      (gltf) => {
-
-        mixerModel = gltf.scene;
-
-        mixerModel.scale.set(0.17, 0.17, 0.17);
-
-        mixerModel.rotation.set(MIXER_TILT_X, 0, 0);
-
-        mixerGroup = new THREE.Group();
-        mixerGroup.add(mixerModel);
-        mixerGroup.visible = false;
-
-        scene.add(mixerGroup);
-
-        placeables.push(mixerGroup);
-
-        alert('Mixer loaded');
-
-      },
-
-      undefined,
-
-      (error) => {
-        alert('Mixer loading error:', error);
-      }
-    );
 
     /* ---- Left / Right Monitors ---- */
 
@@ -208,11 +213,6 @@
       MENU BUTTONS - SELECT WHICH OBJECT TO PLACE
       ========================================================= */
 
-    document.getElementById('placeMixerBtn').addEventListener('click', () => {
-      selectedPlaceable = mixerGroup;
-      console.log('Placement mode: MIXER');
-    });
-
     document.getElementById('placeLeftBtn').addEventListener('click', () => {
       selectedPlaceable = leftMonitorGroup;
       console.log('Placement mode: LEFT MONITOR');
@@ -268,6 +268,7 @@
     document.body.appendChild(arButton);
 
     const arExitBtn = document.getElementById('arExitBtn');
+    const modeControls = document.getElementById('mode-controls');
 
     arExitBtn.style.pointerEvents = 'auto';
 
@@ -282,6 +283,347 @@
       }
 
     });
+
+
+    /* =========================================================
+      SPATIAL AUDIO
+      ========================================================= */
+
+    let audioContext = null;
+    let audioElement = null;
+    let sourceNode = null;
+
+    let splitterNode = null;
+
+    let leftPannerNode = null;
+    let rightPannerNode = null;
+
+    let leftDelayNode = null;
+    let rightDelayNode = null;
+
+    const SPEED_OF_SOUND_METERS_PER_SECOND = 343;
+    const MAX_SOURCE_DELAY_SECONDS = 1;
+
+    function createSpatialAudio() {
+
+      const AudioContextClass =
+        window.AudioContext || window.webkitAudioContext;
+
+      if (!AudioContextClass) {
+        throw new Error('Web Audio API is not supported on this device.');
+      }
+
+      audioContext = new AudioContextClass();
+
+      audioElement = new Audio('./audio/song1.mp3');
+
+      audioElement.loop = true;
+      audioElement.preload = 'auto';
+
+      sourceNode =
+        audioContext.createMediaElementSource(
+          audioElement
+        );
+
+
+      // =========================================================
+      // STEREO SPLITTER
+      // =========================================================
+
+      splitterNode =
+        audioContext.createChannelSplitter(2);
+
+      sourceNode.connect(
+        splitterNode
+      );
+
+
+      // =========================================================
+      // DELAY
+      // =========================================================
+
+      leftDelayNode =
+        audioContext.createDelay(1.0);
+
+      rightDelayNode =
+        audioContext.createDelay(1.0);
+
+
+      // =========================================================
+      // LEFT PANNER
+      // =========================================================
+
+      leftPannerNode =
+        audioContext.createPanner();
+
+      leftPannerNode.panningModel = 'HRTF';
+      leftPannerNode.distanceModel = 'inverse';
+
+      leftPannerNode.refDistance = 1;
+      leftPannerNode.maxDistance = 10;
+      leftPannerNode.rolloffFactor = 1;
+
+      leftPannerNode.coneInnerAngle = 60;
+      leftPannerNode.coneOuterAngle = 180;
+      leftPannerNode.coneOuterGain = 0.3;
+
+
+      // =========================================================
+      // RIGHT PANNER
+      // =========================================================
+
+      rightPannerNode =
+        audioContext.createPanner();
+
+      rightPannerNode.panningModel = 'HRTF';
+      rightPannerNode.distanceModel = 'inverse';
+
+      rightPannerNode.refDistance = 1;
+      rightPannerNode.maxDistance = 10;
+      rightPannerNode.rolloffFactor = 1;
+
+      rightPannerNode.coneInnerAngle = 60;
+      rightPannerNode.coneOuterAngle = 180;
+      rightPannerNode.coneOuterGain = 0.3;
+
+
+      // =========================================================
+      // AUDIO ROUTING
+      // =========================================================
+
+      splitterNode.connect(
+        leftDelayNode,
+        0
+      );
+
+      splitterNode.connect(
+        rightDelayNode,
+        1
+      );
+
+      leftDelayNode.connect(
+        leftPannerNode
+      );
+
+      rightDelayNode.connect(
+        rightPannerNode
+      );
+
+      leftPannerNode.connect(
+        audioContext.destination
+      );
+
+      rightPannerNode.connect(
+        audioContext.destination
+      );
+
+
+      console.log(
+        'Spatial audio graph created successfully'
+      );
+
+      console.log(
+        'Audio context state:',
+        audioContext.state
+      );
+
+    }
+
+    // Updates each panner's position + orientation from the
+    // corresponding monitor group, and sets a distance-based delay
+    // so sound from a farther monitor arrives slightly later.
+    function updatePannerPosition() {
+
+      if (
+        !leftPannerNode ||
+        !rightPannerNode ||
+        !audioContext
+      ) {
+        return;
+      }
+
+      const listenerPosition =
+        camera.getWorldPosition(new THREE.Vector3());
+
+      // ---- Left monitor ----
+
+      const leftPosition =
+        leftMonitorGroup.getWorldPosition(new THREE.Vector3());
+
+      leftPannerNode.positionX.value = leftPosition.x;
+      leftPannerNode.positionY.value = leftPosition.y;
+      leftPannerNode.positionZ.value = leftPosition.z;
+
+      const leftQuaternion =
+        leftMonitorGroup.getWorldQuaternion(new THREE.Quaternion());
+
+      const leftForward = new THREE.Vector3(0, 0, -1);
+      leftForward.applyQuaternion(leftQuaternion);
+
+      leftPannerNode.orientationX.value = leftForward.x;
+      leftPannerNode.orientationY.value = leftForward.y;
+      leftPannerNode.orientationZ.value = leftForward.z;
+
+      if (leftDelayNode && leftMonitorGroup.visible) {
+        const leftDistance =
+          listenerPosition.distanceTo(leftPosition);
+        const leftDelay = Math.min(
+          leftDistance / SPEED_OF_SOUND_METERS_PER_SECOND,
+          MAX_SOURCE_DELAY_SECONDS
+        );
+
+        leftDelayNode.delayTime.setTargetAtTime(
+          leftDelay,
+          audioContext.currentTime,
+          0.05
+        );
+      }
+
+      // ---- Right monitor ----
+
+      const rightPosition =
+        rightMonitorGroup.getWorldPosition(new THREE.Vector3());
+
+      rightPannerNode.positionX.value = rightPosition.x;
+      rightPannerNode.positionY.value = rightPosition.y;
+      rightPannerNode.positionZ.value = rightPosition.z;
+
+      const rightQuaternion =
+        rightMonitorGroup.getWorldQuaternion(new THREE.Quaternion());
+
+      const rightForward = new THREE.Vector3(0, 0, -1);
+      rightForward.applyQuaternion(rightQuaternion);
+
+      rightPannerNode.orientationX.value = rightForward.x;
+      rightPannerNode.orientationY.value = rightForward.y;
+      rightPannerNode.orientationZ.value = rightForward.z;
+
+      if (rightDelayNode && rightMonitorGroup.visible) {
+        const rightDistance =
+          listenerPosition.distanceTo(rightPosition);
+        const rightDelay = Math.min(
+          rightDistance / SPEED_OF_SOUND_METERS_PER_SECOND,
+          MAX_SOURCE_DELAY_SECONDS
+        );
+
+        rightDelayNode.delayTime.setTargetAtTime(
+          rightDelay,
+          audioContext.currentTime,
+          0.05
+        );
+      }
+    }
+
+    // Syncs the AudioListener to the camera so spatialization
+    // reflects where the user is actually standing and looking.
+    function updateAudioListener() {
+
+      if (!audioContext) return;
+
+      const listener = audioContext.listener;
+
+      const cameraPosition =
+        camera.getWorldPosition(new THREE.Vector3());
+
+      const cameraQuaternion =
+        camera.getWorldQuaternion(new THREE.Quaternion());
+
+      const forward = new THREE.Vector3(0, 0, -1);
+      forward.applyQuaternion(cameraQuaternion);
+
+      const up = new THREE.Vector3(0, 1, 0);
+      up.applyQuaternion(cameraQuaternion);
+
+      listener.positionX.value = cameraPosition.x;
+      listener.positionY.value = cameraPosition.y;
+      listener.positionZ.value = cameraPosition.z;
+
+      listener.forwardX.value = forward.x;
+      listener.forwardY.value = forward.y;
+      listener.forwardZ.value = forward.z;
+
+      listener.upX.value = up.x;
+      listener.upY.value = up.y;
+      listener.upZ.value = up.z;
+    }
+
+
+    /* =========================================================
+      PLAY BUTTON
+      ========================================================= */
+
+    const playBtn =
+      document.getElementById('playBtn');
+
+    playBtn.addEventListener(
+      'click',
+      async () => {
+
+        try {
+
+          console.log('PLAY BUTTON PRESSED');
+
+
+          // -------------------------------------------------------
+          // Create audio system
+          // -------------------------------------------------------
+
+          if (!audioContext) {
+            createSpatialAudio();
+          }
+
+
+          // -------------------------------------------------------
+          // Resume AudioContext
+          // -------------------------------------------------------
+
+          if (
+            audioContext.state === 'suspended'
+          ) {
+
+            await audioContext.resume();
+
+          }
+
+
+          console.log(
+            'AudioContext state after resume:',
+            audioContext.state
+          );
+
+
+          // -------------------------------------------------------
+          // Start audio
+          // -------------------------------------------------------
+
+          await audioElement.play();
+
+
+          console.log(
+            'AUDIO PLAYING'
+          );
+
+
+          playBtn.textContent =
+            'SPATIAL AUDIO PLAYING';
+
+
+        } catch (error) {
+
+          console.error(
+            'SPATIAL AUDIO ERROR:',
+            error
+          );
+
+          alert(
+            'Could not start spatial audio:\n' +
+            error.message
+          );
+
+        }
+
+      }
+    );
 
 
     /* =========================================================
@@ -416,12 +758,29 @@
           group.visible = false;
         });
 
+        // Stop audio and reset play button.
+        if (audioElement) {
+          audioElement.pause();
+          audioElement.currentTime = 0;
+        }
+
+        if (audioContext && audioContext.state !== 'closed') {
+          audioContext.suspend();
+        }
+
+        playBtn.textContent = 'PLAY SPATIAL AUDIO';
+
         const objectMenu = document.getElementById('objectMenu');
         objectMenu.style.display = 'none';
         document.body.appendChild(objectMenu);
 
         arExitBtn.style.display = 'none';
         document.body.appendChild(arExitBtn);
+
+        document.body.appendChild(modeControls);
+
+        document.body.appendChild(playBtn);
+        playBtn.style.display = 'none';
 
       }
     );
@@ -444,6 +803,11 @@
 
         arOverlay.appendChild(arExitBtn);
         arExitBtn.style.display = 'block';
+
+        arOverlay.appendChild(modeControls);
+
+        arOverlay.appendChild(playBtn);
+        playBtn.style.display = 'block';
 
         session.addEventListener(
           'selectstart',
@@ -647,6 +1011,12 @@
           }
 
         }
+
+        // Update spatial audio every frame so panner positions and
+        // the listener track the monitors and camera in real time.
+        updatePannerPosition();
+
+        updateAudioListener();
 
         renderer.render(scene, camera);
 

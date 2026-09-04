@@ -2,7 +2,7 @@
   display: none;
   position: fixed;
   left: 50%;
-  bottom: 40px;
+  bottom: 70px;
   transform: translateX(-50%);
   width: 280px;
   padding: 20px;
@@ -57,7 +57,7 @@
      handlers in the JS. */
   display: none;
   position: fixed;
-  top: 20px;
+  top: 100px;
   left: 20px;
   z-index: 10000;
 
@@ -98,7 +98,7 @@
      depend on that button's own fullscreen-linked state. */
   display: none;
   position: fixed;
-  top: 20px;
+  top: 100px;
   right: 20px;
   z-index: 10000;
 
@@ -118,4 +118,33 @@
   padding: 0;
 
   pointer-events: auto;
+}
+
+#mode-controls {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  display: flex;
+  gap: 8px;
+  width: min(92vw, 360px);
+  transform: translateX(-50%);
+  z-index: 10001;
+  pointer-events: auto;
+}
+
+.mode-button {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
+  background: rgba(20, 20, 20, 0.88);
+  color: #ffffff;
+  font: 700 12px Arial, sans-serif;
+  pointer-events: auto;
+}
+
+.mode-button.active {
+  background: #ffffff;
+  color: #222222;
 }
