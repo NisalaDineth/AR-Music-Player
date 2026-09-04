@@ -329,57 +329,127 @@
 
     function createSpatialAudio() {
 
-      audioContext = new AudioContext();
+      const AudioContextClass =
+        window.AudioContext || window.webkitAudioContext;
+
+      if (!AudioContextClass) {
+        throw new Error('Web Audio API is not supported on this device.');
+      }
+
+      audioContext = new AudioContextClass();
 
       audioElement = new Audio('./audio/song1.mp3');
+
       audioElement.loop = true;
+      audioElement.preload = 'auto';
 
       sourceNode =
-        audioContext.createMediaElementSource(audioElement);
+        audioContext.createMediaElementSource(
+          audioElement
+        );
 
-      // Split stereo so the left channel feeds the left monitor
-      // panner and the right channel feeds the right monitor panner.
-      splitterNode = audioContext.createChannelSplitter(2);
 
-      sourceNode.connect(splitterNode);
+      // =========================================================
+      // STEREO SPLITTER
+      // =========================================================
 
-      leftDelayNode = audioContext.createDelay(1.0);
-      rightDelayNode = audioContext.createDelay(1.0);
+      splitterNode =
+        audioContext.createChannelSplitter(2);
 
-      // HRTF panners — one per monitor.
-      leftPannerNode = audioContext.createPanner();
+      sourceNode.connect(
+        splitterNode
+      );
+
+
+      // =========================================================
+      // DELAY
+      // =========================================================
+
+      leftDelayNode =
+        audioContext.createDelay(1.0);
+
+      rightDelayNode =
+        audioContext.createDelay(1.0);
+
+
+      // =========================================================
+      // LEFT PANNER
+      // =========================================================
+
+      leftPannerNode =
+        audioContext.createPanner();
+
       leftPannerNode.panningModel = 'HRTF';
       leftPannerNode.distanceModel = 'inverse';
+
       leftPannerNode.refDistance = 1;
       leftPannerNode.maxDistance = 10;
       leftPannerNode.rolloffFactor = 1;
+
       leftPannerNode.coneInnerAngle = 60;
       leftPannerNode.coneOuterAngle = 180;
       leftPannerNode.coneOuterGain = 0.3;
 
-      rightPannerNode = audioContext.createPanner();
+
+      // =========================================================
+      // RIGHT PANNER
+      // =========================================================
+
+      rightPannerNode =
+        audioContext.createPanner();
+
       rightPannerNode.panningModel = 'HRTF';
       rightPannerNode.distanceModel = 'inverse';
+
       rightPannerNode.refDistance = 1;
       rightPannerNode.maxDistance = 10;
       rightPannerNode.rolloffFactor = 1;
+
       rightPannerNode.coneInnerAngle = 60;
       rightPannerNode.coneOuterAngle = 180;
       rightPannerNode.coneOuterGain = 0.3;
 
-      // Left channel → left delay → left panner → listener
-      splitterNode.connect(leftDelayNode, 0);
-      leftDelayNode.connect(leftPannerNode);
-      leftPannerNode.connect(audioContext.destination);
 
-      // Right channel → right delay → right panner → listener
-      splitterNode.connect(rightDelayNode, 1);
-      rightDelayNode.connect(rightPannerNode);
-      rightPannerNode.connect(audioContext.destination);
+      // =========================================================
+      // AUDIO ROUTING
+      // =========================================================
 
-      updatePannerPosition();
+      splitterNode.connect(
+        leftDelayNode,
+        0
+      );
 
-      console.log('Two-speaker spatial audio created');
+      splitterNode.connect(
+        rightDelayNode,
+        1
+      );
+
+      leftDelayNode.connect(
+        leftPannerNode
+      );
+
+      rightDelayNode.connect(
+        rightPannerNode
+      );
+
+      leftPannerNode.connect(
+        audioContext.destination
+      );
+
+      rightPannerNode.connect(
+        audioContext.destination
+      );
+
+
+      console.log(
+        'Spatial audio graph created successfully'
+      );
+
+      console.log(
+        'Audio context state:',
+        audioContext.state
+      );
+
     }
 
     // Updates each panner's position + orientation from the
@@ -390,8 +460,7 @@
       if (
         !leftPannerNode ||
         !rightPannerNode ||
-        !leftMonitorGroup ||
-        !rightMonitorGroup
+        !audioContext
       ) {
         return;
       }
@@ -506,32 +575,78 @@
       PLAY BUTTON
       ========================================================= */
 
-    const playBtn = document.getElementById('playBtn');
+    const playBtn =
+      document.getElementById('playBtn');
 
-    playBtn.addEventListener('click', async () => {
+    playBtn.addEventListener(
+      'click',
+      async () => {
 
-      try {
+        try {
 
-        if (!audioContext) {
-          createSpatialAudio();
+          console.log('PLAY BUTTON PRESSED');
+
+
+          // -------------------------------------------------------
+          // Create audio system
+          // -------------------------------------------------------
+
+          if (!audioContext) {
+            createSpatialAudio();
+          }
+
+
+          // -------------------------------------------------------
+          // Resume AudioContext
+          // -------------------------------------------------------
+
+          if (
+            audioContext.state === 'suspended'
+          ) {
+
+            await audioContext.resume();
+
+          }
+
+
+          console.log(
+            'AudioContext state after resume:',
+            audioContext.state
+          );
+
+
+          // -------------------------------------------------------
+          // Start audio
+          // -------------------------------------------------------
+
+          await audioElement.play();
+
+
+          console.log(
+            'AUDIO PLAYING'
+          );
+
+
+          playBtn.textContent =
+            'SPATIAL AUDIO PLAYING';
+
+
+        } catch (error) {
+
+          console.error(
+            'SPATIAL AUDIO ERROR:',
+            error
+          );
+
+          alert(
+            'Could not start spatial audio:\n' +
+            error.message
+          );
+
         }
-
-        if (audioContext.state === 'suspended') {
-          await audioContext.resume();
-        }
-
-        await audioElement.play();
-
-        playBtn.textContent = 'SPATIAL AUDIO PLAYING';
-
-      } catch (error) {
-
-        console.error('Audio error:', error);
-        alert('Could not start audio: ' + error.message);
 
       }
-
-    });
+    );
 
 
     /* =========================================================
