@@ -40,7 +40,6 @@
 
 <body>
   <div id="objectMenu">
-    <button id="placeMixerBtn">PLACE MIXER</button>
     <button id="placeLeftBtn">PLACE LEFT MONITOR</button>
     <button id="placeRightBtn">PLACE RIGHT MONITOR</button>
   </div>
@@ -113,8 +112,7 @@
     // Every placeable object is a Group (handles position + Y turn)
     // wrapping the loaded model (handles scale + any built-in tilt).
     // This keeps the two rotations on separate objects so Euler-axis
-    // interaction can't bleed into other axes - the same fix that was
-    // applied to the mixer.
+    // interaction can't bleed into other axes.
     const placeables = [];
 
     let selectedPlaceable = null;  // chosen via menu button; receives the next tap-to-place
@@ -127,44 +125,8 @@
 
     const loader = new GLTFLoader();
 
-    const MIXER_TILT_X = -40 * (Math.PI / 180);
     const MONITOR_SCALE = 0.2;
     const MONITOR_FILL_INTENSITY = 10;
-
-    /* ---- Mixer ---- */
-
-    let mixerGroup = null;
-    let mixerModel = null;
-
-    loader.load(
-      './models/mixer.glb',
-
-      (gltf) => {
-
-        mixerModel = gltf.scene;
-
-        mixerModel.scale.set(0.17, 0.17, 0.17);
-
-        mixerModel.rotation.set(MIXER_TILT_X, 0, 0);
-
-        mixerGroup = new THREE.Group();
-        mixerGroup.add(mixerModel);
-        mixerGroup.visible = false;
-
-        scene.add(mixerGroup);
-
-        placeables.push(mixerGroup);
-
-        alert('Mixer loaded');
-
-      },
-
-      undefined,
-
-      (error) => {
-        alert('Mixer loading error:', error);
-      }
-    );
 
     /* ---- Left / Right Monitors ---- */
 
@@ -231,11 +193,6 @@
     /* =========================================================
       MENU BUTTONS - SELECT WHICH OBJECT TO PLACE
       ========================================================= */
-
-    document.getElementById('placeMixerBtn').addEventListener('click', () => {
-      selectedPlaceable = mixerGroup;
-      console.log('Placement mode: MIXER');
-    });
 
     document.getElementById('placeLeftBtn').addEventListener('click', () => {
       selectedPlaceable = leftMonitorGroup;

@@ -36,7 +36,6 @@
     </a-camera>
 
     <a-assets>
-    <a-asset-item id="mixer" src="./models/mixer.glb"></a-asset-item>
     <a-asset-item id="monitor" src="./models/monitor.glb"></a-asset-item>
 
     <audio id="song1" src="./audio/song1.mp3"></audio>
@@ -50,25 +49,7 @@
     </a-entity>
     <a-entity mindar-image-target="targetIndex: 2">
     </a-entity>
-    <a-entity
-      id="markerless-mixer"
-      visible="false"
-      position="0 0 -1">
-      
-      <a-gltf-model
-        src="#mixer"
-        scale="0.2 0.2 0.2">
-      </a-gltf-model>
-
-    </a-entity>
-
     <!-- <a-gltf-model
-        src="#mixer"
-        position="-1 0 -3"
-        scale="1.0 1.0 1.0">
-    </a-gltf-model>
-
-    <a-gltf-model
         src="#monitor"
         position="1 0 -3"
         scale="1.5 1.5 1.5"
@@ -86,7 +67,6 @@
   <div id="object-menu">
     <div class="menu-title">AR OBJECTS</div>
 
-    <button id="mixer-button">PLACE MIXER</button>
     <button id="monitor-button">MONITOR</button>
   </div>
 
@@ -119,12 +99,7 @@
         artist: "Walen"
       }
     };
-    const mixerButton = document.getElementById('mixer-button');
     const monitorButton = document.getElementById('monitor-button');
-
-          mixerButton.addEventListener('click', () => {
-            alert('Mixer selected');
-          });
 
           monitorButton.addEventListener('click', () => {
             alert('Monitor selected');
@@ -192,57 +167,6 @@
       });
   </script>
 
-  <script>
-    mixerButton.addEventListener('click', async () => {
 
-      try {
-
-        const session = await navigator.xr.requestSession('immersive-ar', {
-          requiredFeatures: ['hit-test']
-        });
-
-        alert('1. AR session started');
-
-        session.addEventListener('end', () => {
-          alert('AR session ended');
-        });
-
-        const viewerSpace = await session.requestReferenceSpace('viewer');
-
-        alert('2. Viewer space created');
-
-        const hitTestSource = await session.requestHitTestSource({
-          space: viewerSpace
-        });
-
-        alert('3. Hit-test source created');
-
-        alert('AR + hit-test session started');
-
-
-        session.requestAnimationFrame(function onXRFrame(time, frame) {
-
-          const hitTestResults =
-            frame.getHitTestResults(hitTestSource);
-
-          if (hitTestResults.length > 0) {
-
-            alert('SURFACE DETECTED');
-
-          }
-
-          session.requestAnimationFrame(onXRFrame);
-
-        });
-
-      } catch (error) {
-
-        console.error(error);
-        alert('AR hit-test error: ' + error.message);
-
-      }
-
-    });
-  </script>
 </body>
 </html>
