@@ -4,29 +4,104 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <title>AR Music - Marker & AR Mode</title>
+
   <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+  <link rel="stylesheet" href="./css/style.css">
 
   <style>
     body {
       margin: 0;
+      overflow: hidden;
+    }
+
+    /* ---------- Mode visibility ----------
+       Both modes live on this single page so the <audio> elements
+       (and the Web Audio graph) are never destroyed by a navigation. */
+
+    body.mode-ar a-scene,
+    body.mode-ar #object-menu,
+    body.mode-marker #three-canvas,
+    body.mode-marker #ARButton,
+    body.mode-marker #audioStatus {
+      display: none !important;
+    }
+
+    #three-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    /* Replaces the old PLAY SPATIAL AUDIO button: it is now a status
+       label because the playing song is spatialized automatically once
+       a monitor is placed. */
+    #audioStatus {
+      position: fixed;
+      left: 50%;
+      bottom: 90px;
+      transform: translateX(-50%);
+      z-index: 10000;
+
+      padding: 12px 24px;
+      border-radius: 10px;
+
+      background: rgba(255, 255, 255, 0.95);
+      color: #222;
+
+      font-size: 15px;
+      font-weight: bold;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      white-space: nowrap;
+
+      pointer-events: none;
+    }
+
+    #audioStatus.warning {
+      background: rgba(255, 210, 90, 0.95);
+    }
+
+    #audioStatus.spatial {
+      background: rgba(120, 255, 150, 0.95);
     }
   </style>
 
-  <link rel="stylesheet" href="./css/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
 
   <meta property="og:image" content="https://bolt.new/static/og_default.png">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
 </head>
 
-<body>
+<body class="mode-marker">
 
   <nav id="mode-controls" aria-label="AR mode selection">
     <button id="marker-mode-button" class="mode-button active" type="button">MARKER MODE</button>
     <button id="ar-mode-button" class="mode-button" type="button">AR MODE</button>
   </nav>
 
+  <!-- =====================================================
+       SHARED AUDIO
+       Kept outside <a-scene> so A-Frame/MindAR lifecycle never
+       touches them. These three elements are THE audio source for
+       both Marker mode and AR mode.
+       ===================================================== -->
+  <audio id="song1" src="./audio/song1.mp3" preload="auto" crossorigin="anonymous"></audio>
+  <audio id="song2" src="./audio/song2.mp3" preload="auto" crossorigin="anonymous"></audio>
+  <audio id="song3" src="./audio/song3.mp3" preload="auto" crossorigin="anonymous"></audio>
+
+  <!-- =====================================================
+       MARKER MODE (MindAR / A-Frame)
+       ===================================================== -->
   <a-scene
     mindar-image="imageTargetSrc: ./targets/targets.mind;"
     color-space="sRGB"
@@ -34,35 +109,23 @@
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
   >
-
     <a-camera
       position="0 0 0"
       look-controls="enabled: false">
     </a-camera>
 
     <a-assets>
-    <a-asset-item id="monitor" src="./models/monitor.glb"></a-asset-item>
-
-    <audio id="song1" src="./audio/song1.mp3"></audio>
-    <audio id="song2" src="./audio/song2.mp3"></audio>
-    <audio id="song3" src="./audio/song3.mp3"></audio>
+      <a-asset-item id="monitor" src="./models/monitor.glb"></a-asset-item>
     </a-assets>
 
-    <a-entity mindar-image-target="targetIndex: 0">
-    </a-entity>
-    <a-entity mindar-image-target="targetIndex: 1">
-    </a-entity>
-    <a-entity mindar-image-target="targetIndex: 2">
-    </a-entity>
-    <!-- <a-gltf-model
-        src="#monitor"
-        position="1 0 -3"
-        scale="1.5 1.5 1.5"
-        rotation="0 -35 0">
-    </a-gltf-model> -->
-  
+    <a-entity mindar-image-target="targetIndex: 0"></a-entity>
+    <a-entity mindar-image-target="targetIndex: 1"></a-entity>
+    <a-entity mindar-image-target="targetIndex: 2"></a-entity>
   </a-scene>
 
+  <!-- Song overlay is shared: visible in Marker mode after the first
+       scan, and moved into the WebXR DOM overlay during an AR session
+       so the user can still see / pause the song. -->
   <div id="song-overlay">
     <div class="song-title">Song Title</div>
     <div class="song-artist">Artist Name</div>
@@ -71,53 +134,202 @@
 
   <div id="object-menu">
     <div class="menu-title">AR OBJECTS</div>
-
     <button id="monitor-button">MONITOR</button>
   </div>
 
-  <script>
-    document.getElementById('marker-mode-button').addEventListener('click', () => {
-      window.location.href = './index.html';
-    });
+  <!-- =====================================================
+       AR MODE (Three.js / WebXR)
+       ===================================================== -->
+  <div id="objectMenu">
+    <button id="placeLeftBtn">PLACE LEFT MONITOR</button>
+    <button id="placeRightBtn">PLACE RIGHT MONITOR</button>
+  </div>
 
-    document.getElementById('ar-mode-button').addEventListener('click', () => {
-      window.location.href = './three-ar-test.html';
-    });
+  <div id="audioStatus" class="warning">Scan a marker first</div>
 
-    const targets = document.querySelectorAll('[mindar-image-target]');
-    const overlay = document.getElementById('song-overlay');
+  <button id="arExitBtn" aria-label="Stop AR">✕</button>
+
+  <script type="module">
+
+    import * as THREE from
+      'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+    import { ARButton } from
+      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/ARButton.js';
+
+    import { GLTFLoader } from
+      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+
+
+    /* =========================================================
+      SHARED AUDIO STATE + WEB AUDIO GRAPH
+      =========================================================
+
+      Graph (created lazily on the first user tap that plays a song):
+
+        song1 ─┐
+        song2 ─┼─► sourceGain ─┬─► directGain ──────────────────────► destination
+        song3 ─┘               └─► spatialGain ─► splitter ─┬─► L delay ─► L gain ─► L panner ─► destination
+                                                            └─► R delay ─► R gain ─► R panner ─► destination
+
+      Marker mode  : directGain = 1, spatialGain = 0
+      AR + placed  : directGain = 0, spatialGain = 1
+
+      Switching only changes gains, so the song never stops. */
+
     const songs = {
       0: document.getElementById('song1'),
       1: document.getElementById('song2'),
       2: document.getElementById('song3')
     };
 
+    const tracks = {
+      0: { title: "Angel Of The Flame", artist: "Johny Grimes" },
+      1: { title: "Furious",            artist: "Aylex" },
+      2: { title: "Jamaican Rasta",     artist: "Walen" }
+    };
+
     let currentSong = null;
     let markerEverFound = false;
-    const playText = document.getElementById('play-text');
+
+    let audioContext = null;
+    let sourceGain = null;
+    let directGain = null;
+    let spatialGain = null;
+    let splitterNode = null;
+    let leftDelayNode = null;
+    let rightDelayNode = null;
+    let leftChannelGain = null;
+    let rightChannelGain = null;
+    let leftPannerNode = null;
+    let rightPannerNode = null;
+
+    let spatialActive = false;
+
+    const SPEED_OF_SOUND_METERS_PER_SECOND = 343;
+    const MAX_SOURCE_DELAY_SECONDS = 1;
+    const GAIN_RAMP_SECONDS = 0.05;
+
+    function configurePanner(panner) {
+      panner.panningModel = 'HRTF';
+      panner.distanceModel = 'inverse';
+      panner.refDistance = 1;
+      panner.maxDistance = 10;
+      panner.rolloffFactor = 1;
+      panner.coneInnerAngle = 60;
+      panner.coneOuterAngle = 180;
+      panner.coneOuterGain = 0.3;
+    }
+
+    function ensureAudioGraph() {
+
+      if (audioContext) return;
+
+      const AudioContextClass =
+        window.AudioContext || window.webkitAudioContext;
+
+      if (!AudioContextClass) {
+        throw new Error('Web Audio API is not supported on this device.');
+      }
+
+      audioContext = new AudioContextClass();
+
+      sourceGain  = audioContext.createGain();
+      directGain  = audioContext.createGain();
+      spatialGain = audioContext.createGain();
+
+      directGain.gain.value  = 1;
+      spatialGain.gain.value = 0;
+
+      // Every song element feeds the same sourceGain. NOTE: once
+      // createMediaElementSource is called the element only plays
+      // through this graph, which is exactly what we want.
+      Object.values(songs).forEach((song) => {
+        audioContext.createMediaElementSource(song).connect(sourceGain);
+      });
+
+      sourceGain.connect(directGain);
+      sourceGain.connect(spatialGain);
+
+      directGain.connect(audioContext.destination);
+
+      splitterNode = audioContext.createChannelSplitter(2);
+      spatialGain.connect(splitterNode);
+
+      leftDelayNode  = audioContext.createDelay(1.0);
+      rightDelayNode = audioContext.createDelay(1.0);
+
+      leftChannelGain  = audioContext.createGain();
+      rightChannelGain = audioContext.createGain();
+
+      // Each side stays silent until its monitor is actually placed.
+      leftChannelGain.gain.value  = 0;
+      rightChannelGain.gain.value = 0;
+
+      leftPannerNode  = audioContext.createPanner();
+      rightPannerNode = audioContext.createPanner();
+
+      configurePanner(leftPannerNode);
+      configurePanner(rightPannerNode);
+
+      splitterNode.connect(leftDelayNode, 0);
+      splitterNode.connect(rightDelayNode, 1);
+
+      leftDelayNode.connect(leftChannelGain);
+      rightDelayNode.connect(rightChannelGain);
+
+      leftChannelGain.connect(leftPannerNode);
+      rightChannelGain.connect(rightPannerNode);
+
+      leftPannerNode.connect(audioContext.destination);
+      rightPannerNode.connect(audioContext.destination);
+
+      console.log('Shared audio graph created');
+    }
+
+    async function resumeAudioContext() {
+      if (audioContext && audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+    }
+
+    // Crossfades between the plain stereo path and the spatial path.
+    function setSpatial(enabled) {
+
+      spatialActive = enabled;
+
+      if (!audioContext) {
+        updateAudioStatus();
+        return;
+      }
+
+      const now = audioContext.currentTime;
+
+      directGain.gain.setTargetAtTime(enabled ? 0 : 1, now, GAIN_RAMP_SECONDS);
+      spatialGain.gain.setTargetAtTime(enabled ? 1 : 0, now, GAIN_RAMP_SECONDS);
+
+      updateAudioStatus();
+    }
+
+    function isSongPlaying() {
+      return !!currentSong && !currentSong.paused;
+    }
+
+
+    /* =========================================================
+      MARKER MODE LOGIC (from the original index.html)
+      ========================================================= */
+
+    const sceneEl   = document.querySelector('a-scene');
+    const targets   = document.querySelectorAll('[mindar-image-target]');
+    const overlay   = document.getElementById('song-overlay');
+    const playText  = document.getElementById('play-text');
     const titleText = document.querySelector('.song-title');
     const artistText = document.querySelector('.song-artist');
-    const tracks = {
-      0: {
-        title: "Angel Of The Flame",
-        artist: "Johny Grimes"
-      },
 
-      1: {
-        title: "Furious",
-        artist: "Aylex"
-      },
-
-      2: {
-        title: "Jamaican Rasta",
-        artist: "Walen"
-      }
-    };
-    const monitorButton = document.getElementById('monitor-button');
-
-          monitorButton.addEventListener('click', () => {
-            alert('Monitor selected');
-          });
+    document.getElementById('monitor-button').addEventListener('click', () => {
+      alert('Monitor selected');
+    });
 
     targets.forEach((target) => {
 
@@ -126,24 +338,21 @@
         const index =
           target.getAttribute('mindar-image-target').targetIndex;
 
-        titleText.textContent = tracks[index].title;
+        titleText.textContent  = tracks[index].title;
         artistText.textContent = tracks[index].artist;
 
         currentSong = songs[index];
 
-        // Update the play/pause label to reflect the current song's
-        // state without auto-playing it.
         playText.textContent =
           currentSong.paused ? '▶ PLAY' : '⏸ PAUSE';
 
         markerEverFound = true;
         overlay.style.display = 'block';
+
+        updateAudioStatus();
       });
 
       target.addEventListener('targetLost', () => {
-        // Keep the overlay visible after the first scan so the user
-        // can always pause the current song. It only disappears if
-        // no marker has ever been found.
         if (!markerEverFound) {
           overlay.style.display = 'none';
         }
@@ -151,42 +360,681 @@
 
     });
 
-    overlay.addEventListener('click', () => {
+    overlay.addEventListener('click', async () => {
 
       if (!currentSong) return;
 
-      // If this song is already playing, pause it.
       if (!currentSong.paused) {
         currentSong.pause();
         return;
       }
 
-      // Pause any other song that may be playing.
+      // The tap is a user gesture: safe moment to build / resume audio.
+      try {
+        ensureAudioGraph();
+        await resumeAudioContext();
+      } catch (error) {
+        console.error('Audio graph error:', error);
+        alert('Could not start audio:\n' + error.message);
+        return;
+      }
+
       Object.values(songs).forEach((song) => {
         if (song !== currentSong) {
           song.pause();
         }
       });
 
-      // Now play the selected song.
-      currentSong.play();
+      await currentSong.play();
     });
 
-      Object.values(songs).forEach((song) => {
-
-        song.addEventListener('play', () => {
-          playText.textContent = '⏸ PAUSE';
-        });
-
-        song.addEventListener('pause', () => {
-          playText.textContent = '▶ PLAY';
-        });
-
-        
-
+    Object.values(songs).forEach((song) => {
+      song.addEventListener('play', () => {
+        playText.textContent = '⏸ PAUSE';
+        updateAudioStatus();
       });
-  </script>
+      song.addEventListener('pause', () => {
+        playText.textContent = '▶ PLAY';
+        updateAudioStatus();
+      });
+    });
 
+
+    /* =========================================================
+      MINDAR START / STOP HELPERS
+      MindAR must release the camera before WebXR can use it, and
+      must be restarted when we come back to Marker mode.
+      ========================================================= */
+
+    let mindarReady = false;
+    let mindarRunning = false;
+
+    sceneEl.addEventListener('arReady', () => {
+      mindarReady = true;
+      mindarRunning = true;
+    });
+
+    sceneEl.addEventListener('arError', (event) => {
+      console.error('MindAR error', event);
+    });
+
+    function getMindarSystem() {
+      return sceneEl.systems && sceneEl.systems['mindar-image-system'];
+    }
+
+    function stopMindar() {
+      const system = getMindarSystem();
+      if (!system || !mindarRunning) return;
+      try {
+        system.stop();
+        if (system.ui && system.ui.hideScanning) system.ui.hideScanning();
+        if (system.ui && system.ui.hideLoading)  system.ui.hideLoading();
+        mindarRunning = false;
+        console.log('MindAR stopped');
+      } catch (error) {
+        console.warn('MindAR stop failed', error);
+      }
+    }
+
+    function startMindar() {
+      const system = getMindarSystem();
+      if (!system || mindarRunning || !mindarReady) return;
+      try {
+        system.start();
+        mindarRunning = true;
+        console.log('MindAR restarted');
+      } catch (error) {
+        console.warn('MindAR start failed', error);
+      }
+    }
+
+
+    /* =========================================================
+      THREE.JS SETUP (AR MODE)
+      ========================================================= */
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(
+      70,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      20
+    );
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true
+    });
+
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    renderer.domElement.id = 'three-canvas';
+
+    document.body.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+    directionalLight.position.set(2, 4, 2);
+    scene.add(directionalLight);
+
+
+    /* =========================================================
+      PLACEABLE-OBJECT REGISTRY
+      ========================================================= */
+
+    const placeables = [];
+
+    let selectedPlaceable = null;
+    let draggingObject = null;
+
+
+    /* =========================================================
+      MODELS
+      ========================================================= */
+
+    const loader = new GLTFLoader();
+
+    const MONITOR_SCALE = 0.2;
+    const MONITOR_FILL_INTENSITY = 10;
+
+    let leftMonitorGroup = null;
+    let rightMonitorGroup = null;
+
+    function addMonitorFillLight(group, position) {
+      const fillLight = new THREE.PointLight(0xffffff, MONITOR_FILL_INTENSITY, 10);
+      fillLight.position.copy(position);
+      group.add(fillLight);
+    }
+
+    loader.load(
+      './models/monitor.glb',
+      (gltf) => {
+
+        const leftModel  = gltf.scene;
+        const rightModel = gltf.scene.clone(true);
+
+        leftModel.scale.set(MONITOR_SCALE, MONITOR_SCALE, MONITOR_SCALE);
+        rightModel.scale.set(MONITOR_SCALE, MONITOR_SCALE, MONITOR_SCALE);
+
+        leftModel.rotation.set(0, 0, 0);
+        rightModel.rotation.set(0, 0, 0);
+
+        leftMonitorGroup = new THREE.Group();
+        leftMonitorGroup.add(leftModel);
+        addMonitorFillLight(leftMonitorGroup, new THREE.Vector3(0, 0, 1.5));
+        addMonitorFillLight(leftMonitorGroup, new THREE.Vector3(-1, -0.5, 0));
+        addMonitorFillLight(leftMonitorGroup, new THREE.Vector3(0, -0.5, -1.5));
+        leftMonitorGroup.visible = false;
+        scene.add(leftMonitorGroup);
+        placeables.push(leftMonitorGroup);
+
+        rightMonitorGroup = new THREE.Group();
+        rightMonitorGroup.add(rightModel);
+        addMonitorFillLight(rightMonitorGroup, new THREE.Vector3(0, 0, 1.5));
+        addMonitorFillLight(rightMonitorGroup, new THREE.Vector3(-1, -0.5, 0));
+        addMonitorFillLight(rightMonitorGroup, new THREE.Vector3(0, -0.5, -1.5));
+        rightMonitorGroup.visible = false;
+        scene.add(rightMonitorGroup);
+        placeables.push(rightMonitorGroup);
+
+        console.log('Left and right monitors loaded');
+      },
+      undefined,
+      (error) => {
+        console.error('Monitor loading error:', error);
+      }
+    );
+
+
+    /* =========================================================
+      MENU BUTTONS - SELECT WHICH OBJECT TO PLACE
+      ========================================================= */
+
+    document.getElementById('placeLeftBtn').addEventListener('click', () => {
+      selectedPlaceable = leftMonitorGroup;
+      console.log('Placement mode: LEFT MONITOR');
+    });
+
+    document.getElementById('placeRightBtn').addEventListener('click', () => {
+      selectedPlaceable = rightMonitorGroup;
+      console.log('Placement mode: RIGHT MONITOR');
+    });
+
+
+    /* =========================================================
+      PLACEMENT RETICLE
+      ========================================================= */
+
+    const reticle = new THREE.Mesh(
+      new THREE.RingGeometry(0.08, 0.1, 32),
+      new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+    );
+
+    reticle.rotation.x = -Math.PI / 2;
+    reticle.matrixAutoUpdate = false;
+    reticle.visible = false;
+    scene.add(reticle);
+
+
+    /* =========================================================
+      WEBXR AR BUTTON + DOM OVERLAY
+      ========================================================= */
+
+    const arOverlay = document.createElement('div');
+    arOverlay.id = 'arOverlay';
+    arOverlay.style.position = 'fixed';
+    arOverlay.style.inset = '0';
+    arOverlay.style.pointerEvents = 'none';
+    arOverlay.style.zIndex = '1';
+    document.body.appendChild(arOverlay);
+
+    const arButton = ARButton.createButton(renderer, {
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay'],
+      domOverlay: { root: arOverlay }
+    });
+
+    document.body.appendChild(arButton);
+
+    const arExitBtn   = document.getElementById('arExitBtn');
+    const modeControls = document.getElementById('mode-controls');
+    const objectMenu  = document.getElementById('objectMenu');
+    const audioStatus = document.getElementById('audioStatus');
+
+    arExitBtn.style.pointerEvents = 'auto';
+
+    arExitBtn.addEventListener('click', () => {
+      const session = renderer.xr.getSession();
+      if (session) session.end();
+    });
+
+
+    /* =========================================================
+      AUDIO STATUS LABEL (replaces the PLAY SPATIAL AUDIO button)
+      ========================================================= */
+
+    function updateAudioStatus() {
+
+      if (!currentSong) {
+        audioStatus.className = 'warning';
+        audioStatus.textContent = 'Scan a marker first';
+        return;
+      }
+
+      const title = titleText.textContent;
+
+      if (currentSong.paused) {
+        audioStatus.className = 'warning';
+        audioStatus.textContent = 'Paused: ' + title + ' - tap the song card to play';
+        return;
+      }
+
+      if (spatialActive) {
+        audioStatus.className = 'spatial';
+        audioStatus.textContent = 'Spatial audio: ' + title;
+        return;
+      }
+
+      audioStatus.className = '';
+      audioStatus.textContent = 'Playing: ' + title + ' - place a monitor to spatialize';
+    }
+
+
+    /* =========================================================
+      SPATIAL UPDATES (per frame)
+      ========================================================= */
+
+    function updateSidePanner(group, panner, delayNode, channelGain, listenerPosition) {
+
+      if (!group) return;
+
+      const position = group.getWorldPosition(new THREE.Vector3());
+
+      panner.positionX.value = position.x;
+      panner.positionY.value = position.y;
+      panner.positionZ.value = position.z;
+
+      const forward = new THREE.Vector3(0, 0, -1)
+        .applyQuaternion(group.getWorldQuaternion(new THREE.Quaternion()));
+
+      panner.orientationX.value = forward.x;
+      panner.orientationY.value = forward.y;
+      panner.orientationZ.value = forward.z;
+
+      const now = audioContext.currentTime;
+
+      channelGain.gain.setTargetAtTime(group.visible ? 1 : 0, now, GAIN_RAMP_SECONDS);
+
+      if (group.visible) {
+        const distance = listenerPosition.distanceTo(position);
+        const delay = Math.min(
+          distance / SPEED_OF_SOUND_METERS_PER_SECOND,
+          MAX_SOURCE_DELAY_SECONDS
+        );
+        delayNode.delayTime.setTargetAtTime(delay, now, 0.05);
+      }
+    }
+
+    function updatePannerPosition() {
+
+      if (!audioContext || !spatialActive) return;
+
+      const listenerPosition = camera.getWorldPosition(new THREE.Vector3());
+
+      updateSidePanner(leftMonitorGroup,  leftPannerNode,  leftDelayNode,  leftChannelGain,  listenerPosition);
+      updateSidePanner(rightMonitorGroup, rightPannerNode, rightDelayNode, rightChannelGain, listenerPosition);
+    }
+
+    function updateAudioListener() {
+
+      if (!audioContext || !spatialActive) return;
+
+      const listener = audioContext.listener;
+
+      const cameraPosition   = camera.getWorldPosition(new THREE.Vector3());
+      const cameraQuaternion = camera.getWorldQuaternion(new THREE.Quaternion());
+
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(cameraQuaternion);
+      const up      = new THREE.Vector3(0, 1, 0).applyQuaternion(cameraQuaternion);
+
+      listener.positionX.value = cameraPosition.x;
+      listener.positionY.value = cameraPosition.y;
+      listener.positionZ.value = cameraPosition.z;
+
+      listener.forwardX.value = forward.x;
+      listener.forwardY.value = forward.y;
+      listener.forwardZ.value = forward.z;
+
+      listener.upX.value = up.x;
+      listener.upY.value = up.y;
+      listener.upZ.value = up.z;
+    }
+
+
+    /* =========================================================
+      HIT-TEST / DRAG STATE
+      ========================================================= */
+
+    let hitTestSource = null;
+    let hitTestSourceRequested = false;
+
+    let transientHitTestSource = null;
+    let transientHitTestSourceRequested = false;
+
+    let activeInputSource = null;
+    let pressStartTime = 0;
+    let justFinishedDrag = false;
+
+    const LONG_PRESS_DURATION_MS = 500;
+
+    const dragRaycaster = new THREE.Raycaster();
+
+
+    /* =========================================================
+      TAP TO PLACE
+      ========================================================= */
+
+    function onSelect() {
+
+      if (justFinishedDrag) {
+        justFinishedDrag = false;
+        return;
+      }
+
+      if (!reticle.visible || !selectedPlaceable) return;
+
+      if (selectedPlaceable.visible) return;
+
+      placeAtReticle(selectedPlaceable);
+    }
+
+    function placeAtReticle(group) {
+
+      group.position.setFromMatrixPosition(reticle.matrix);
+      faceCamera(group);
+      group.visible = true;
+
+      // A monitor now exists in the room: route the playing song
+      // through the spatial path. No extra button press needed.
+      if (audioContext) {
+        resumeAudioContext();
+      }
+      setSpatial(true);
+    }
+
+    function faceCamera(group) {
+      const cameraPos = camera.getWorldPosition(new THREE.Vector3());
+      const angle = Math.atan2(
+        cameraPos.x - group.position.x,
+        cameraPos.z - group.position.z
+      );
+      group.rotation.set(0, angle, 0);
+    }
+
+
+    /* =========================================================
+      LONG-PRESS-TO-DRAG HELPERS
+      ========================================================= */
+
+    function getInputSourceRay(inputSource, frame, referenceSpace) {
+
+      const pose = frame.getPose(inputSource.targetRaySpace, referenceSpace);
+      if (!pose) return null;
+
+      const matrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
+      const origin = new THREE.Vector3().setFromMatrixPosition(matrix);
+      const direction = new THREE.Vector3(0, 0, -1).transformDirection(matrix);
+
+      return { origin, direction };
+    }
+
+
+    /* =========================================================
+      XR SESSION START / END
+      ========================================================= */
+
+    renderer.xr.addEventListener('sessionstart', () => {
+
+      const session = renderer.xr.getSession();
+
+      arOverlay.appendChild(objectMenu);
+      objectMenu.style.display = 'flex';
+      objectMenu.style.pointerEvents = 'auto';
+
+      arOverlay.appendChild(arExitBtn);
+      arExitBtn.style.display = 'block';
+
+      arOverlay.appendChild(modeControls);
+      modeControls.style.pointerEvents = 'auto';
+
+      arOverlay.appendChild(audioStatus);
+
+      // Bring the song card into AR so the user can still pause/play.
+      arOverlay.appendChild(overlay);
+      overlay.style.pointerEvents = 'auto';
+      if (currentSong) overlay.style.display = 'block';
+
+      updateAudioStatus();
+
+      session.addEventListener('selectstart', (event) => {
+        activeInputSource = event.inputSource;
+        pressStartTime = performance.now();
+        draggingObject = null;
+      });
+
+      session.addEventListener('selectend', () => {
+        if (draggingObject) justFinishedDrag = true;
+        draggingObject = null;
+        activeInputSource = null;
+      });
+
+      session.addEventListener('select', onSelect);
+    });
+
+    renderer.xr.addEventListener('sessionend', () => {
+
+      console.log('AR SESSION ENDED');
+
+      hitTestSource = null;
+      hitTestSourceRequested = false;
+
+      if (transientHitTestSource) transientHitTestSource.cancel();
+      transientHitTestSource = null;
+      transientHitTestSourceRequested = false;
+
+      activeInputSource = null;
+      justFinishedDrag = false;
+      draggingObject = null;
+      selectedPlaceable = null;
+
+      reticle.visible = false;
+
+      placeables.forEach((group) => { group.visible = false; });
+
+      // IMPORTANT: the song keeps playing. We only leave the spatial
+      // path and go back to plain stereo.
+      setSpatial(false);
+
+      objectMenu.style.display = 'none';
+      document.body.appendChild(objectMenu);
+
+      arExitBtn.style.display = 'none';
+      document.body.appendChild(arExitBtn);
+
+      document.body.appendChild(modeControls);
+      document.body.appendChild(audioStatus);
+      document.body.appendChild(overlay);
+    });
+
+
+    /* =========================================================
+      MODE SWITCHING (the core of this change)
+      No more page navigation -> audio is never interrupted.
+      ========================================================= */
+
+    const markerModeButton = document.getElementById('marker-mode-button');
+    const arModeButton     = document.getElementById('ar-mode-button');
+
+    let currentMode = 'marker';
+
+    function setActiveButton(mode) {
+      markerModeButton.classList.toggle('active', mode === 'marker');
+      arModeButton.classList.toggle('active', mode === 'ar');
+    }
+
+    function switchToArMode() {
+
+      if (currentMode === 'ar') return;
+      currentMode = 'ar';
+
+      // Release the camera from MindAR so WebXR can claim it.
+      stopMindar();
+
+      document.body.classList.remove('mode-marker');
+      document.body.classList.add('mode-ar');
+
+      setActiveButton('ar');
+      updateAudioStatus();
+    }
+
+    async function switchToMarkerMode() {
+
+      if (currentMode === 'marker') return;
+      currentMode = 'marker';
+
+      const session = renderer.xr.getSession();
+
+      if (session) {
+        try {
+          await session.end();   // sessionend handler resets AR state
+        } catch (error) {
+          console.warn('Session end failed', error);
+        }
+      }
+
+      setSpatial(false);
+
+      document.body.classList.remove('mode-ar');
+      document.body.classList.add('mode-marker');
+
+      // Restore the song card visibility rule used by Marker mode.
+      overlay.style.display = markerEverFound ? 'block' : 'none';
+
+      setActiveButton('marker');
+
+      // Give the camera a moment to be released before MindAR grabs it.
+      setTimeout(startMindar, 300);
+    }
+
+    markerModeButton.addEventListener('click', switchToMarkerMode);
+    arModeButton.addEventListener('click', switchToArMode);
+
+
+    /* =========================================================
+      ANIMATION LOOP
+      ========================================================= */
+
+    renderer.setAnimationLoop((timestamp, frame) => {
+
+      if (frame) {
+
+        const session = renderer.xr.getSession();
+        const referenceSpace = renderer.xr.getReferenceSpace();
+
+        if (!hitTestSourceRequested) {
+          session.requestReferenceSpace('viewer').then((viewerSpace) => {
+            session.requestHitTestSource({ space: viewerSpace }).then((source) => {
+              hitTestSource = source;
+            });
+          });
+          hitTestSourceRequested = true;
+        }
+
+        if (!transientHitTestSourceRequested) {
+          session.requestHitTestSourceForTransientInput({
+            profile: 'generic-touchscreen'
+          }).then((source) => {
+            transientHitTestSource = source;
+          }).catch((error) => {
+            console.error('Transient hit test subscription failed', error);
+          });
+          transientHitTestSourceRequested = true;
+        }
+
+        const showReticle =
+          hitTestSource && selectedPlaceable && !selectedPlaceable.visible;
+
+        if (showReticle) {
+          const hitTestResults = frame.getHitTestResults(hitTestSource);
+          if (hitTestResults.length > 0) {
+            const pose = hitTestResults[0].getPose(referenceSpace);
+            reticle.visible = true;
+            reticle.matrix.fromArray(pose.transform.matrix);
+          } else {
+            reticle.visible = false;
+          }
+        } else {
+          reticle.visible = false;
+        }
+
+        if (activeInputSource && !draggingObject) {
+          const elapsed = performance.now() - pressStartTime;
+          if (elapsed >= LONG_PRESS_DURATION_MS) {
+            const ray = getInputSourceRay(activeInputSource, frame, referenceSpace);
+            if (ray) {
+              dragRaycaster.set(ray.origin, ray.direction);
+              for (const group of placeables) {
+                if (!group.visible) continue;
+                if (dragRaycaster.intersectObject(group, true).length > 0) {
+                  draggingObject = group;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        if (draggingObject && transientHitTestSource && activeInputSource) {
+          const transientResults =
+            frame.getHitTestResultsForTransientInput(transientHitTestSource);
+          const match = transientResults.find(
+            (result) => result.inputSource === activeInputSource
+          );
+          if (match && match.results.length > 0) {
+            const pose = match.results[0].getPose(referenceSpace);
+            draggingObject.position.set(
+              pose.transform.position.x,
+              pose.transform.position.y,
+              pose.transform.position.z
+            );
+            faceCamera(draggingObject);
+          }
+        }
+      }
+
+      updatePannerPosition();
+      updateAudioListener();
+
+      renderer.render(scene, camera);
+    });
+
+
+    /* =========================================================
+      WINDOW RESIZE
+      ========================================================= */
+
+    window.addEventListener('resize', () => {
+      if (renderer.xr.isPresenting) return;
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+  </script>
 
 </body>
 </html>
