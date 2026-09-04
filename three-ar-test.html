@@ -105,6 +105,7 @@
 
     const MIXER_TILT_X = -40 * (Math.PI / 180);
     const MONITOR_SCALE = 0.2;
+    const MONITOR_FILL_INTENSITY = 10;
 
     /* ---- Mixer ---- */
 
@@ -146,6 +147,19 @@
     let leftMonitorGroup = null;
     let rightMonitorGroup = null;
 
+    function addMonitorFillLight(group, position) {
+
+      const fillLight = new THREE.PointLight(
+        0xffffff,
+        MONITOR_FILL_INTENSITY,
+        10
+      );
+
+      fillLight.position.copy(position);
+      group.add(fillLight);
+
+    }
+
     loader.load(
       './models/monitor.glb',
 
@@ -162,12 +176,18 @@
 
         leftMonitorGroup = new THREE.Group();
         leftMonitorGroup.add(leftModel);
+        addMonitorFillLight(leftMonitorGroup, new THREE.Vector3(0, 0, 1.5));
+        addMonitorFillLight(leftMonitorGroup, new THREE.Vector3(-1, -0.5, 0));
+        addMonitorFillLight(leftMonitorGroup, new THREE.Vector3(0, -0.5, -1.5));
         leftMonitorGroup.visible = false;
         scene.add(leftMonitorGroup);
         placeables.push(leftMonitorGroup);
 
         rightMonitorGroup = new THREE.Group();
         rightMonitorGroup.add(rightModel);
+        addMonitorFillLight(rightMonitorGroup, new THREE.Vector3(0, 0, 1.5));
+        addMonitorFillLight(rightMonitorGroup, new THREE.Vector3(-1, -0.5, 0));
+        addMonitorFillLight(rightMonitorGroup, new THREE.Vector3(0, -0.5, -1.5));
         rightMonitorGroup.visible = false;
         scene.add(rightMonitorGroup);
         placeables.push(rightMonitorGroup);
