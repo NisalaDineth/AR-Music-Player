@@ -80,6 +80,7 @@
     };
 
     let currentSong = null;
+    let markerEverFound = false;
     const playText = document.getElementById('play-text');
     const titleText = document.querySelector('.song-title');
     const artistText = document.querySelector('.song-artist');
@@ -117,16 +118,22 @@
 
         currentSong = songs[index];
 
-        // Only show the details.
-        // DO NOT start, pause, or reset the song.
+        // Update the play/pause label to reflect the current song's
+        // state without auto-playing it.
         playText.textContent =
           currentSong.paused ? '▶ PLAY' : '⏸ PAUSE';
 
+        markerEverFound = true;
         overlay.style.display = 'block';
       });
 
       target.addEventListener('targetLost', () => {
-        overlay.style.display = 'none';
+        // Keep the overlay visible after the first scan so the user
+        // can always pause the current song. It only disappears if
+        // no marker has ever been found.
+        if (!markerEverFound) {
+          overlay.style.display = 'none';
+        }
       });
 
     });
