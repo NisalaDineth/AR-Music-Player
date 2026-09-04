@@ -22,6 +22,11 @@
 
 <body>
 
+  <nav id="mode-controls" aria-label="AR mode selection">
+    <button id="marker-mode-button" class="mode-button active" type="button">MARKER MODE</button>
+    <button id="ar-mode-button" class="mode-button" type="button">AR MODE</button>
+  </nav>
+
   <a-scene
     mindar-image="imageTargetSrc: ./targets/targets.mind;"
     color-space="sRGB"
@@ -71,6 +76,14 @@
   </div>
 
   <script>
+    document.getElementById('marker-mode-button').addEventListener('click', () => {
+      window.location.href = './index.html';
+    });
+
+    document.getElementById('ar-mode-button').addEventListener('click', () => {
+      window.location.href = './three-ar-test.html';
+    });
+
     const targets = document.querySelectorAll('[mindar-image-target]');
     const overlay = document.getElementById('song-overlay');
     const songs = {
