@@ -57,7 +57,7 @@
      handlers in the JS. */
   display: none;
   position: fixed;
-  top: 20px;
+  top: 100px;
   left: 20px;
   z-index: 10000;
 
@@ -98,7 +98,7 @@
      depend on that button's own fullscreen-linked state. */
   display: none;
   position: fixed;
-  top: 20px;
+  top: 100px;
   right: 20px;
   z-index: 10000;
 
