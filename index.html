@@ -4,189 +4,1127 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <title>AR Music Studio</title>
+
+  <!-- A-Frame + MindAR for marker mode -->
   <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
     body {
       margin: 0;
+      overflow: hidden;
+    }
+
+    /* Hide the A-Frame canvas when not in marker mode */
+    body.ar-mode .a-canvas,
+    body.ar-mode a-scene {
+      display: none !important;
+    }
+
+    /* Hide the Three.js canvas when not in AR mode */
+    body.marker-mode canvas[data-engine] {
+      display: none !important;
+    }
+
+    #song-overlay {
+      display: none;
+      position: fixed;
+      left: 50%;
+      bottom: 40px;
+      transform: translateX(-50%);
+      width: 280px;
+      padding: 20px;
+      background: rgba(20, 20, 20, 0.9);
+      color: white;
+      text-align: center;
+      border-radius: 16px;
+      z-index: 9999;
+      font-family: Arial, sans-serif;
+      pointer-events: auto;
+    }
+
+    .song-title {
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    .song-artist {
+      margin-top: 8px;
+      font-size: 16px;
+      opacity: 0.8;
+    }
+
+    .play-text {
+      margin-top: 15px;
+      font-size: 18px;
+    }
+
+    #objectMenu {
+      display: none;
+      position: fixed;
+      top: 100px;
+      left: 20px;
+      z-index: 10000;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px;
+      width: 130px;
+      background: rgba(20, 20, 20, 0.85);
+      border-radius: 12px;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      pointer-events: auto;
+    }
+
+    #objectMenu button {
+      width: 100%;
+      padding: 8px;
+      border: none;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #222;
+      font-size: 13px;
+      pointer-events: auto;
+    }
+
+    #arExitBtn {
+      display: none;
+      position: fixed;
+      top: 100px;
+      right: 20px;
+      z-index: 10000;
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(20, 20, 20, 0.85);
+      color: #ffffff;
+      font-size: 18px;
+      font-family: Arial, sans-serif;
+      line-height: 40px;
+      text-align: center;
+      padding: 0;
+      pointer-events: auto;
+    }
+
+    #mode-controls {
+      position: fixed;
+      top: max(16px, env(safe-area-inset-top));
+      left: 50%;
+      display: flex;
+      gap: 8px;
+      width: min(92vw, 360px);
+      transform: translateX(-50%);
+      z-index: 10001;
+      pointer-events: auto;
+    }
+
+    .mode-button {
+      flex: 1;
+      min-height: 44px;
+      padding: 0 12px;
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      border-radius: 8px;
+      background: rgba(20, 20, 20, 0.88);
+      color: #ffffff;
+      font: 700 12px Arial, sans-serif;
+      pointer-events: auto;
+    }
+
+    .mode-button.active {
+      background: #ffffff;
+      color: #222222;
+    }
+
+    #spatial-status {
+      display: none;
+      position: fixed;
+      bottom: 130px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 16px;
+      background: rgba(0, 128, 0, 0.85);
+      color: white;
+      border-radius: 8px;
+      font: bold 13px Arial, sans-serif;
+      z-index: 9999;
+      white-space: nowrap;
+    }
+
+    /* Hide the WebXR ARButton "Enter AR" / white overlay */
+    #webxr-ar-button {
+      display: none !important;
     }
   </style>
 
-  <link rel="stylesheet" href="./css/style.css">
-
   <meta property="og:image" content="https://bolt.new/static/og_default.png">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
 </head>
 
-<body>
+<body class="marker-mode">
 
   <nav id="mode-controls" aria-label="AR mode selection">
     <button id="marker-mode-button" class="mode-button active" type="button">MARKER MODE</button>
     <button id="ar-mode-button" class="mode-button" type="button">AR MODE</button>
   </nav>
 
+  <!-- A-Frame scene for marker mode -->
   <a-scene
-    mindar-image="imageTargetSrc: ./targets/targets.mind;"
+    mindar-image="imageTargetSrc: ./targets/targets.mind; autoStart: true;"
     color-space="sRGB"
     renderer="colorManagement: true, physicallyCorrectLights"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
+    embedded
   >
-
     <a-camera
       position="0 0 0"
       look-controls="enabled: false">
     </a-camera>
 
     <a-assets>
-    <a-asset-item id="monitor" src="./models/monitor.glb"></a-asset-item>
-
-    <audio id="song1" src="./audio/song1.mp3"></audio>
-    <audio id="song2" src="./audio/song2.mp3"></audio>
-    <audio id="song3" src="./audio/song3.mp3"></audio>
+      <a-asset-item id="monitor" src="./models/monitor.glb"></a-asset-item>
     </a-assets>
 
-    <a-entity mindar-image-target="targetIndex: 0">
-    </a-entity>
-    <a-entity mindar-image-target="targetIndex: 1">
-    </a-entity>
-    <a-entity mindar-image-target="targetIndex: 2">
-    </a-entity>
-    <!-- <a-gltf-model
-        src="#monitor"
-        position="1 0 -3"
-        scale="1.5 1.5 1.5"
-        rotation="0 -35 0">
-    </a-gltf-model> -->
-  
+    <a-entity mindar-image-target="targetIndex: 0"></a-entity>
+    <a-entity mindar-image-target="targetIndex: 1"></a-entity>
+    <a-entity mindar-image-target="targetIndex: 2"></a-entity>
   </a-scene>
 
+  <!-- Song overlay (shared between modes) -->
   <div id="song-overlay">
     <div class="song-title">Song Title</div>
     <div class="song-artist">Artist Name</div>
     <div id="play-text" class="play-text">▶ PLAY</div>
   </div>
 
-  <div id="object-menu">
-    <div class="menu-title">AR OBJECTS</div>
-
-    <button id="monitor-button">MONITOR</button>
+  <!-- Object menu for AR mode -->
+  <div id="objectMenu">
+    <button id="placeLeftBtn">PLACE LEFT MONITOR</button>
+    <button id="placeRightBtn">PLACE RIGHT MONITOR</button>
   </div>
 
-  <script>
-    document.getElementById('marker-mode-button').addEventListener('click', () => {
-      window.location.href = './index.html';
-    });
+  <div id="spatial-status"></div>
 
-    document.getElementById('ar-mode-button').addEventListener('click', () => {
-      window.location.href = './three-ar-test.html';
-    });
+  <button id="arExitBtn" aria-label="Stop AR">✕</button>
 
-    const targets = document.querySelectorAll('[mindar-image-target]');
-    const overlay = document.getElementById('song-overlay');
-    const songs = {
-      0: document.getElementById('song1'),
-      1: document.getElementById('song2'),
-      2: document.getElementById('song3')
+  <!-- Hidden audio elements used as Web Audio source nodes -->
+  <!-- (the <audio> inside <a-assets> are only for A-Frame; these
+       are the ones we route through the Web Audio graph) -->
+  <audio id="webAudio1" src="./audio/song1.mp3" loop preload="auto" crossorigin="anonymous"></audio>
+  <audio id="webAudio2" src="./audio/song2.mp3" loop preload="auto" crossorigin="anonymous"></audio>
+  <audio id="webAudio3" src="./audio/song3.mp3" loop preload="auto" crossorigin="anonymous"></audio>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+
+    /* =========================================================
+      MODE STATE
+      ========================================================= */
+
+    let currentMode = 'marker';  // 'marker' or 'ar'
+
+    const markerModeBtn = document.getElementById('marker-mode-button');
+    const arModeBtn = document.getElementById('ar-mode-button');
+    const aScene = document.querySelector('a-scene');
+
+    /* =========================================================
+      SHARED SONG DATA
+      ========================================================= */
+
+    const tracks = {
+      0: { title: "Angel Of The Flame", artist: "Johny Grimes" },
+      1: { title: "Furious", artist: "Aylex" },
+      2: { title: "Jamaican Rasta", artist: "Walen" }
     };
 
-    let currentSong = null;
+    // The <audio> elements that feed the Web Audio graph.
+    const webAudioSongs = {
+      0: document.getElementById('webAudio1'),
+      1: document.getElementById('webAudio2'),
+      2: document.getElementById('webAudio3')
+    };
+
+    let currentSongIndex = null;
     let markerEverFound = false;
+
     const playText = document.getElementById('play-text');
     const titleText = document.querySelector('.song-title');
     const artistText = document.querySelector('.song-artist');
-    const tracks = {
-      0: {
-        title: "Angel Of The Flame",
-        artist: "Johny Grimes"
-      },
+    const songOverlay = document.getElementById('song-overlay');
+    const spatialStatus = document.getElementById('spatial-status');
 
-      1: {
-        title: "Furious",
-        artist: "Aylex"
-      },
 
-      2: {
-        title: "Jamaican Rasta",
-        artist: "Walen"
+    /* =========================================================
+      SHARED WEB AUDIO SYSTEM
+      ========================================================= */
+
+    // One AudioContext for the whole app. It survives mode switches.
+    let audioContext = null;
+
+    // Per-song MediaElementSource nodes (created lazily on first play).
+    const sourceNodes = {};
+
+    // The currently-active source node (so we can disconnect it when
+    // switching songs or switching between direct / spatial routing).
+    let activeSourceNode = null;
+
+    // Spatial audio nodes (only created when entering AR mode).
+    let spatialGraph = null;  // { input, leftPanner, rightPanner, leftDelay, rightDelay, splitter }
+
+    let spatialActive = false;  // true when both monitors are placed and routing is spatial
+
+
+    function ensureAudioContext() {
+      if (audioContext) return;
+
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioContext = new AC();
+    }
+
+    function ensureSourceNode(songIndex) {
+      ensureAudioContext();
+
+      if (sourceNodes[songIndex]) return sourceNodes[songIndex];
+
+      const node = audioContext.createMediaElementSource(
+        webAudioSongs[songIndex]
+      );
+      sourceNodes[songIndex] = node;
+      return node;
+    }
+
+    // Routes the active source directly to the output (marker mode,
+    // or AR mode before both monitors are placed).
+    function routeDirect(sourceNode) {
+      try { sourceNode.disconnect(); } catch (e) {}
+      sourceNode.connect(audioContext.destination);
+    }
+
+    // Routes the active source through the spatial graph (left panner
+    // → left monitor, right panner → right monitor).
+    function routeSpatial(sourceNode) {
+      if (!spatialGraph) return;
+      try { sourceNode.disconnect(); } catch (e) {}
+      sourceNode.connect(spatialGraph.input);
+    }
+
+    // Called when the user picks a song (via marker scan or play tap).
+    function selectSong(index) {
+      currentSongIndex = index;
+      titleText.textContent = tracks[index].title;
+      artistText.textContent = tracks[index].artist;
+      updatePlayLabel();
+    }
+
+    // Plays the currently-selected song, routing through the correct
+    // graph (direct in marker mode, spatial when monitors are placed).
+    async function playCurrentSong() {
+      if (currentSongIndex === null) return;
+
+      ensureAudioContext();
+
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
       }
-    };
-    const monitorButton = document.getElementById('monitor-button');
 
-          monitorButton.addEventListener('click', () => {
-            alert('Monitor selected');
-          });
-
-    targets.forEach((target) => {
-
-      target.addEventListener('targetFound', () => {
-
-        const index =
-          target.getAttribute('mindar-image-target').targetIndex;
-
-        titleText.textContent = tracks[index].title;
-        artistText.textContent = tracks[index].artist;
-
-        currentSong = songs[index];
-
-        // Update the play/pause label to reflect the current song's
-        // state without auto-playing it.
-        playText.textContent =
-          currentSong.paused ? '▶ PLAY' : '⏸ PAUSE';
-
-        markerEverFound = true;
-        overlay.style.display = 'block';
-      });
-
-      target.addEventListener('targetLost', () => {
-        // Keep the overlay visible after the first scan so the user
-        // can always pause the current song. It only disappears if
-        // no marker has ever been found.
-        if (!markerEverFound) {
-          overlay.style.display = 'none';
-        }
-      });
-
-    });
-
-    overlay.addEventListener('click', () => {
-
-      if (!currentSong) return;
-
-      // If this song is already playing, pause it.
-      if (!currentSong.paused) {
-        currentSong.pause();
-        return;
-      }
-
-      // Pause any other song that may be playing.
-      Object.values(songs).forEach((song) => {
-        if (song !== currentSong) {
+      // Pause all other songs.
+      Object.entries(webAudioSongs).forEach(([idx, song]) => {
+        if (parseInt(idx) !== currentSongIndex && !song.paused) {
           song.pause();
         }
       });
 
-      // Now play the selected song.
-      currentSong.play();
+      const sourceNode = ensureSourceNode(currentSongIndex);
+      activeSourceNode = sourceNode;
+
+      if (spatialActive && spatialGraph) {
+        routeSpatial(sourceNode);
+      } else {
+        routeDirect(sourceNode);
+      }
+
+      await webAudioSongs[currentSongIndex].play();
+    }
+
+    function pauseCurrentSong() {
+      if (currentSongIndex === null) return;
+      webAudioSongs[currentSongIndex].pause();
+    }
+
+    function updatePlayLabel() {
+      if (currentSongIndex === null) {
+        playText.textContent = '▶ PLAY';
+        return;
+      }
+      const song = webAudioSongs[currentSongIndex];
+      playText.textContent = song.paused ? '▶ PLAY' : '⏸ PAUSE';
+    }
+
+    // Re-routes the active source when spatial becomes available or
+    // unavailable without interrupting playback.
+    function switchRouting() {
+      if (!activeSourceNode || !audioContext) return;
+      if (spatialActive && spatialGraph) {
+        routeSpatial(activeSourceNode);
+      } else {
+        routeDirect(activeSourceNode);
+      }
+    }
+
+
+    // Keep the play/pause label in sync with actual audio events.
+    Object.values(webAudioSongs).forEach((song) => {
+      song.addEventListener('play', updatePlayLabel);
+      song.addEventListener('pause', updatePlayLabel);
     });
 
-      Object.values(songs).forEach((song) => {
 
-        song.addEventListener('play', () => {
-          playText.textContent = '⏸ PAUSE';
-        });
+    /* =========================================================
+      SONG OVERLAY TAP (play / pause)
+      ========================================================= */
 
-        song.addEventListener('pause', () => {
-          playText.textContent = '▶ PLAY';
-        });
+    songOverlay.addEventListener('click', () => {
+      if (currentSongIndex === null) return;
+      const song = webAudioSongs[currentSongIndex];
+      if (!song.paused) {
+        pauseCurrentSong();
+      } else {
+        playCurrentSong();
+      }
+    });
 
-        
 
+    /* =========================================================
+      MARKER MODE (A-Frame / MindAR)
+      ========================================================= */
+
+    const targets = document.querySelectorAll('[mindar-image-target]');
+
+    targets.forEach((target) => {
+      target.addEventListener('targetFound', () => {
+        const index = parseInt(
+          target.getAttribute('mindar-image-target').targetIndex
+        );
+        selectSong(index);
+        markerEverFound = true;
+        songOverlay.style.display = 'block';
       });
-  </script>
 
+      target.addEventListener('targetLost', () => {
+        if (!markerEverFound) {
+          songOverlay.style.display = 'none';
+        }
+      });
+    });
+
+
+    function startMarkerMode() {
+      currentMode = 'marker';
+      document.body.classList.remove('ar-mode');
+      document.body.classList.add('marker-mode');
+
+      // Restart MindAR if it was stopped.
+      try {
+        if (aScene) {
+          const mindar = aScene.systems['mindar-image'];
+          if (mindar && !mindar.running) {
+            mindar.start();
+          }
+          aScene.play();
+        }
+      } catch (e) {
+        console.warn('Could not start MindAR', e);
+      }
+
+      // Switch audio to direct routing (no spatial panners).
+      spatialActive = false;
+      switchRouting();
+
+      songOverlay.style.display = markerEverFound ? 'block' : 'none';
+      spatialStatus.style.display = 'none';
+    }
+
+
+    /* =========================================================
+      THREE.JS / WEBXR SETUP (AR mode)
+      ========================================================= */
+
+    const THREE = await import(
+      'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js'
+    );
+    const { ARButton } = await import(
+      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/ARButton.js'
+    );
+    const { GLTFLoader } = await import(
+      'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js'
+    );
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(
+      70, window.innerWidth / window.innerHeight, 0.01, 20
+    );
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    renderer.domElement.style.display = 'none';  // hidden until AR mode
+    document.body.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+    directionalLight.position.set(2, 4, 2);
+    scene.add(directionalLight);
+
+
+    /* =========================================================
+      MONITOR MODELS
+      ========================================================= */
+
+    const loader = new GLTFLoader();
+    const MONITOR_SCALE = 0.2;
+    const MONITOR_FILL_INTENSITY = 10;
+
+    let leftMonitorGroup = null;
+    let rightMonitorGroup = null;
+
+    const placeables = [];
+    let selectedPlaceable = null;
+    let draggingObject = null;
+
+    // Persisted monitor positions (survive session end / mode switch).
+    const monitorPositions = {
+      left: null,
+      right: null
+    };
+
+    function addMonitorFillLight(group, position) {
+      const fillLight = new THREE.PointLight(
+        0xffffff, MONITOR_FILL_INTENSITY, 10
+      );
+      fillLight.position.copy(position);
+      group.add(fillLight);
+    }
+
+    loader.load('./models/monitor.glb', (gltf) => {
+      const leftModel = gltf.scene;
+      const rightModel = gltf.scene.clone(true);
+
+      leftModel.scale.set(MONITOR_SCALE, MONITOR_SCALE, MONITOR_SCALE);
+      rightModel.scale.set(MONITOR_SCALE, MONITOR_SCALE, MONITOR_SCALE);
+
+      leftModel.rotation.set(0, 0, 0);
+      rightModel.rotation.set(0, 0, 0);
+
+      leftMonitorGroup = new THREE.Group();
+      leftMonitorGroup.add(leftModel);
+      addMonitorFillLight(leftMonitorGroup, new THREE.Vector3(0, 0, 1.5));
+      addMonitorFillLight(leftMonitorGroup, new THREE.Vector3(-1, -0.5, 0));
+      addMonitorFillLight(leftMonitorGroup, new THREE.Vector3(0, -0.5, -1.5));
+      leftMonitorGroup.visible = false;
+      scene.add(leftMonitorGroup);
+      placeables.push(leftMonitorGroup);
+
+      rightMonitorGroup = new THREE.Group();
+      rightMonitorGroup.add(rightModel);
+      addMonitorFillLight(rightMonitorGroup, new THREE.Vector3(0, 0, 1.5));
+      addMonitorFillLight(rightMonitorGroup, new THREE.Vector3(-1, -0.5, 0));
+      addMonitorFillLight(rightMonitorGroup, new THREE.Vector3(0, -0.5, -1.5));
+      rightMonitorGroup.visible = false;
+      scene.add(rightMonitorGroup);
+      placeables.push(rightMonitorGroup);
+
+      console.log('Monitors loaded');
+    });
+
+
+    /* =========================================================
+      RETICLE
+      ========================================================= */
+
+    const reticle = new THREE.Mesh(
+      new THREE.RingGeometry(0.08, 0.1, 32),
+      new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+    );
+    reticle.rotation.x = -Math.PI / 2;
+    reticle.matrixAutoUpdate = false;
+    reticle.visible = false;
+    scene.add(reticle);
+
+
+    /* =========================================================
+      WEBXR AR BUTTON (hidden - we start AR programmatically)
+      ========================================================= */
+
+    const arOverlay = document.createElement('div');
+    arOverlay.id = 'arOverlay';
+    arOverlay.style.position = 'fixed';
+    arOverlay.style.inset = '0';
+    arOverlay.style.pointerEvents = 'none';
+    arOverlay.style.zIndex = '1';
+    document.body.appendChild(arOverlay);
+
+    // Create the ARButton but immediately hide it. We use it only for
+    // its session-management internals; the user never sees it.
+    const arButton = ARButton.createButton(renderer, {
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay'],
+      domOverlay: { root: arOverlay }
+    });
+    arButton.id = 'webxr-ar-button';
+    arButton.style.display = 'none';
+    document.body.appendChild(arButton);
+
+    const arExitBtn = document.getElementById('arExitBtn');
+    arExitBtn.style.pointerEvents = 'auto';
+
+
+    /* =========================================================
+      SPATIAL AUDIO GRAPH (created on entering AR mode)
+      ========================================================= */
+
+    const SPEED_OF_SOUND = 343;
+    const MAX_DELAY = 1;
+
+    function createSpatialGraph() {
+      if (spatialGraph) return spatialGraph;
+
+      ensureAudioContext();
+
+      const input = audioContext.createGain();  // entry point for the source
+
+      const splitter = audioContext.createChannelSplitter(2);
+      input.connect(splitter);
+
+      const leftDelay = audioContext.createDelay(1.0);
+      const rightDelay = audioContext.createDelay(1.0);
+
+      splitter.connect(leftDelay, 0);
+      splitter.connect(rightDelay, 1);
+
+      const leftPanner = audioContext.createPanner();
+      leftPanner.panningModel = 'HRTF';
+      leftPanner.distanceModel = 'inverse';
+      leftPanner.refDistance = 1;
+      leftPanner.maxDistance = 10;
+      leftPanner.rolloffFactor = 1;
+      leftPanner.coneInnerAngle = 60;
+      leftPanner.coneOuterAngle = 180;
+      leftPanner.coneOuterGain = 0.3;
+
+      const rightPanner = audioContext.createPanner();
+      rightPanner.panningModel = 'HRTF';
+      rightPanner.distanceModel = 'inverse';
+      rightPanner.refDistance = 1;
+      rightPanner.maxDistance = 10;
+      rightPanner.rolloffFactor = 1;
+      rightPanner.coneInnerAngle = 60;
+      rightPanner.coneOuterAngle = 180;
+      rightPanner.coneOuterGain = 0.3;
+
+      leftDelay.connect(leftPanner);
+      rightDelay.connect(rightPanner);
+
+      leftPanner.connect(audioContext.destination);
+      rightPanner.connect(audioContext.destination);
+
+      spatialGraph = { input, splitter, leftDelay, rightDelay, leftPanner, rightPanner };
+      console.log('Spatial audio graph created');
+      return spatialGraph;
+    }
+
+    function updateSpatialPanners() {
+      if (!spatialGraph || !leftMonitorGroup || !rightMonitorGroup) return;
+
+      const listenerPos = camera.getWorldPosition(new THREE.Vector3());
+
+      // Left monitor
+      const leftPos = leftMonitorGroup.getWorldPosition(new THREE.Vector3());
+      spatialGraph.leftPanner.positionX.value = leftPos.x;
+      spatialGraph.leftPanner.positionY.value = leftPos.y;
+      spatialGraph.leftPanner.positionZ.value = leftPos.z;
+
+      const leftQuat = leftMonitorGroup.getWorldQuaternion(new THREE.Quaternion());
+      const leftFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(leftQuat);
+      spatialGraph.leftPanner.orientationX.value = leftFwd.x;
+      spatialGraph.leftPanner.orientationY.value = leftFwd.y;
+      spatialGraph.leftPanner.orientationZ.value = leftFwd.z;
+
+      if (leftMonitorGroup.visible) {
+        const dist = listenerPos.distanceTo(leftPos);
+        const delay = Math.min(dist / SPEED_OF_SOUND, MAX_DELAY);
+        spatialGraph.leftDelay.delayTime.setTargetAtTime(
+          delay, audioContext.currentTime, 0.05
+        );
+      }
+
+      // Right monitor
+      const rightPos = rightMonitorGroup.getWorldPosition(new THREE.Vector3());
+      spatialGraph.rightPanner.positionX.value = rightPos.x;
+      spatialGraph.rightPanner.positionY.value = rightPos.y;
+      spatialGraph.rightPanner.positionZ.value = rightPos.z;
+
+      const rightQuat = rightMonitorGroup.getWorldQuaternion(new THREE.Quaternion());
+      const rightFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(rightQuat);
+      spatialGraph.rightPanner.orientationX.value = rightFwd.x;
+      spatialGraph.rightPanner.orientationY.value = rightFwd.y;
+      spatialGraph.rightPanner.orientationZ.value = rightFwd.z;
+
+      if (rightMonitorGroup.visible) {
+        const dist = listenerPos.distanceTo(rightPos);
+        const delay = Math.min(dist / SPEED_OF_SOUND, MAX_DELAY);
+        spatialGraph.rightDelay.delayTime.setTargetAtTime(
+          delay, audioContext.currentTime, 0.05
+        );
+      }
+    }
+
+    function updateAudioListener() {
+      if (!audioContext) return;
+      const listener = audioContext.listener;
+
+      const camPos = camera.getWorldPosition(new THREE.Vector3());
+      const camQuat = camera.getWorldQuaternion(new THREE.Quaternion());
+
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camQuat);
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camQuat);
+
+      listener.positionX.value = camPos.x;
+      listener.positionY.value = camPos.y;
+      listener.positionZ.value = camPos.z;
+      listener.forwardX.value = fwd.x;
+      listener.forwardY.value = fwd.y;
+      listener.forwardZ.value = fwd.z;
+      listener.upX.value = up.x;
+      listener.upY.value = up.y;
+      listener.upZ.value = up.z;
+    }
+
+    // Check if both monitors are placed; if so, switch to spatial.
+    function checkSpatialActivation() {
+      const bothPlaced =
+        leftMonitorGroup && rightMonitorGroup &&
+        leftMonitorGroup.visible && rightMonitorGroup.visible;
+
+      if (bothPlaced && !spatialActive) {
+        spatialActive = true;
+        createSpatialGraph();
+        switchRouting();
+        spatialStatus.textContent = 'Spatial audio active';
+        spatialStatus.style.display = 'block';
+      } else if (!bothPlaced && spatialActive) {
+        spatialActive = false;
+        switchRouting();
+        spatialStatus.style.display = 'none';
+      }
+    }
+
+
+    /* =========================================================
+      HIT-TEST / DRAG STATE
+      ========================================================= */
+
+    let hitTestSource = null;
+    let hitTestSourceRequested = false;
+    let transientHitTestSource = null;
+    let transientHitTestSourceRequested = false;
+    let activeInputSource = null;
+    let pressStartTime = 0;
+    let justFinishedDrag = false;
+    const LONG_PRESS_MS = 500;
+    const dragRaycaster = new THREE.Raycaster();
+
+
+    /* =========================================================
+      TAP TO PLACE / DRAG
+      ========================================================= */
+
+    function faceCamera(group) {
+      const camPos = camera.getWorldPosition(new THREE.Vector3());
+      const angle = Math.atan2(
+        camPos.x - group.position.x,
+        camPos.z - group.position.z
+      );
+      group.rotation.set(0, angle, 0);
+    }
+
+    function placeAtReticle(group) {
+      group.position.setFromMatrixPosition(reticle.matrix);
+      faceCamera(group);
+      group.visible = true;
+      saveMonitorPositions();
+      checkSpatialActivation();
+    }
+
+    function onSelect() {
+      if (justFinishedDrag) {
+        justFinishedDrag = false;
+        return;
+      }
+      if (!reticle.visible || !selectedPlaceable) return;
+      if (selectedPlaceable.visible) return;
+      placeAtReticle(selectedPlaceable);
+    }
+
+    function getInputSourceRay(inputSource, frame, refSpace) {
+      const pose = frame.getPose(inputSource.targetRaySpace, refSpace);
+      if (!pose) return null;
+      const matrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
+      const origin = new THREE.Vector3().setFromMatrixPosition(matrix);
+      const direction = new THREE.Vector3(0, 0, -1).transformDirection(matrix);
+      return { origin, direction };
+    }
+
+
+    /* =========================================================
+      SAVE / RESTORE MONITOR POSITIONS
+      ========================================================= */
+
+    function saveMonitorPositions() {
+      if (leftMonitorGroup && leftMonitorGroup.visible) {
+        monitorPositions.left = {
+          x: leftMonitorGroup.position.x,
+          y: leftMonitorGroup.position.y,
+          z: leftMonitorGroup.position.z,
+          rotY: leftMonitorGroup.rotation.y
+        };
+      }
+      if (rightMonitorGroup && rightMonitorGroup.visible) {
+        monitorPositions.right = {
+          x: rightMonitorGroup.position.x,
+          y: rightMonitorGroup.position.y,
+          z: rightMonitorGroup.position.z,
+          rotY: rightMonitorGroup.rotation.y
+        };
+      }
+    }
+
+    function restoreMonitorPositions() {
+      if (leftMonitorGroup && monitorPositions.left) {
+        const p = monitorPositions.left;
+        leftMonitorGroup.position.set(p.x, p.y, p.z);
+        leftMonitorGroup.rotation.set(0, p.rotY, 0);
+        leftMonitorGroup.visible = true;
+      }
+      if (rightMonitorGroup && monitorPositions.right) {
+        const p = monitorPositions.right;
+        rightMonitorGroup.position.set(p.x, p.y, p.z);
+        rightMonitorGroup.rotation.set(0, p.rotY, 0);
+        rightMonitorGroup.visible = true;
+      }
+      checkSpatialActivation();
+    }
+
+
+    /* =========================================================
+      AR SESSION LIFECYCLE
+      ========================================================= */
+
+    const objectMenu = document.getElementById('objectMenu');
+
+    renderer.xr.addEventListener('sessionstart', () => {
+      console.log('AR SESSION STARTED');
+
+      const session = renderer.xr.getSession();
+
+      renderer.domElement.style.display = 'block';
+
+      arOverlay.appendChild(objectMenu);
+      objectMenu.style.display = 'flex';
+      objectMenu.style.pointerEvents = 'auto';
+
+      arOverlay.appendChild(arExitBtn);
+      arExitBtn.style.display = 'block';
+
+      // Restore previously placed monitors.
+      restoreMonitorPositions();
+
+      // Keep the song overlay visible if a song was already selected.
+      if (markerEverFound) {
+        songOverlay.style.display = 'block';
+      }
+
+      session.addEventListener('selectstart', (event) => {
+        activeInputSource = event.inputSource;
+        pressStartTime = performance.now();
+        draggingObject = null;
+      });
+
+      session.addEventListener('selectend', () => {
+        if (draggingObject) {
+          justFinishedDrag = true;
+          saveMonitorPositions();
+        }
+        draggingObject = null;
+        activeInputSource = null;
+      });
+
+      session.addEventListener('select', onSelect);
+    });
+
+    renderer.xr.addEventListener('sessionend', () => {
+      console.log('AR SESSION ENDED');
+
+      hitTestSource = null;
+      hitTestSourceRequested = false;
+      if (transientHitTestSource) {
+        transientHitTestSource.cancel();
+      }
+      transientHitTestSource = null;
+      transientHitTestSourceRequested = false;
+
+      activeInputSource = null;
+      justFinishedDrag = false;
+      draggingObject = null;
+      selectedPlaceable = null;
+
+      reticle.visible = false;
+
+      // Save positions before hiding so they can be restored next time.
+      saveMonitorPositions();
+
+      placeables.forEach((group) => { group.visible = false; });
+
+      // Switch back to direct audio routing but DON'T pause the song.
+      spatialActive = false;
+      switchRouting();
+      spatialStatus.style.display = 'none';
+
+      renderer.domElement.style.display = 'none';
+
+      objectMenu.style.display = 'none';
+      document.body.appendChild(objectMenu);
+
+      arExitBtn.style.display = 'none';
+      document.body.appendChild(arExitBtn);
+
+      // Go back to marker mode.
+      startMarkerMode();
+    });
+
+
+    /* =========================================================
+      EXIT AR BUTTON
+      ========================================================= */
+
+    arExitBtn.addEventListener('click', () => {
+      const session = renderer.xr.getSession();
+      if (session) session.end();
+    });
+
+
+    /* =========================================================
+      OBJECT MENU BUTTONS
+      ========================================================= */
+
+    document.getElementById('placeLeftBtn').addEventListener('click', () => {
+      selectedPlaceable = leftMonitorGroup;
+    });
+
+    document.getElementById('placeRightBtn').addEventListener('click', () => {
+      selectedPlaceable = rightMonitorGroup;
+    });
+
+
+    /* =========================================================
+      ANIMATION LOOP
+      ========================================================= */
+
+    renderer.setAnimationLoop((timestamp, frame) => {
+      if (frame && renderer.xr.isPresenting) {
+        const session = renderer.xr.getSession();
+        const refSpace = renderer.xr.getReferenceSpace();
+
+        if (!hitTestSourceRequested) {
+          session.requestReferenceSpace('viewer').then((vs) => {
+            session.requestHitTestSource({ space: vs }).then((s) => {
+              hitTestSource = s;
+            });
+          });
+          hitTestSourceRequested = true;
+        }
+
+        if (!transientHitTestSourceRequested) {
+          session.requestHitTestSourceForTransientInput({
+            profile: 'generic-touchscreen'
+          }).then((s) => {
+            transientHitTestSource = s;
+          }).catch((e) => {
+            console.error('Transient hit test failed', e);
+          });
+          transientHitTestSourceRequested = true;
+        }
+
+        // Reticle
+        const showReticle =
+          hitTestSource && selectedPlaceable && !selectedPlaceable.visible;
+
+        if (showReticle) {
+          const results = frame.getHitTestResults(hitTestSource);
+          if (results.length > 0) {
+            const pose = results[0].getPose(refSpace);
+            reticle.visible = true;
+            reticle.matrix.fromArray(pose.transform.matrix);
+          } else {
+            reticle.visible = false;
+          }
+        } else {
+          reticle.visible = false;
+        }
+
+        // Long-press detection
+        if (activeInputSource && !draggingObject) {
+          const elapsed = performance.now() - pressStartTime;
+          if (elapsed >= LONG_PRESS_MS) {
+            const ray = getInputSourceRay(activeInputSource, frame, refSpace);
+            if (ray) {
+              dragRaycaster.set(ray.origin, ray.direction);
+              for (const group of placeables) {
+                if (!group.visible) continue;
+                const hits = dragRaycaster.intersectObject(group, true);
+                if (hits.length > 0) {
+                  draggingObject = group;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // Drag
+        if (draggingObject && transientHitTestSource && activeInputSource) {
+          const results = frame.getHitTestResultsForTransientInput(
+            transientHitTestSource
+          );
+          const match = results.find(
+            (r) => r.inputSource === activeInputSource
+          );
+          if (match && match.results.length > 0) {
+            const pose = match.results[0].getPose(refSpace);
+            draggingObject.position.set(
+              pose.transform.position.x,
+              pose.transform.position.y,
+              pose.transform.position.z
+            );
+            faceCamera(draggingObject);
+          }
+        }
+      }
+
+      // Spatial audio updates run every frame regardless of mode.
+      if (spatialActive) {
+        updateSpatialPanners();
+        updateAudioListener();
+      }
+
+      renderer.render(scene, camera);
+    });
+
+
+    /* =========================================================
+      MODE SWITCHING
+      ========================================================= */
+
+    function startARMode() {
+      currentMode = 'ar';
+      document.body.classList.remove('marker-mode');
+      document.body.classList.add('ar-mode');
+
+      // Stop MindAR to free the camera for WebXR.
+      try {
+        if (aScene) {
+          const mindar = aScene.systems['mindar-image'];
+          if (mindar && mindar.running) {
+            mindar.stop();
+          }
+          aScene.pause();
+        }
+      } catch (e) {
+        console.warn('Could not stop MindAR', e);
+      }
+
+      // Start the WebXR AR session programmatically — no white
+      // "Enter AR" button screen.
+      const session = renderer.xr.getSession();
+      if (session) {
+        // Already in an AR session, nothing to do.
+        renderer.domElement.style.display = 'block';
+        return;
+      }
+
+      // Request an immersive-ar session directly.
+      navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['dom-overlay'],
+        domOverlay: { root: arOverlay }
+      }).then((newSession) => {
+        renderer.xr.setSession(newSession);
+      }).catch((err) => {
+        console.error('Failed to start AR session', err);
+        alert('Could not start AR camera: ' + err.message);
+        // Fall back to marker mode.
+        startMarkerMode();
+      });
+    }
+
+    markerModeBtn.addEventListener('click', () => {
+      if (currentMode === 'marker') return;
+
+      const session = renderer.xr.getSession();
+      if (session) {
+        // Ending the session triggers sessionend → startMarkerMode.
+        session.end();
+      } else {
+        startMarkerMode();
+      }
+
+      // Update active button styling.
+      markerModeBtn.classList.add('active');
+      arModeBtn.classList.remove('active');
+    });
+
+    arModeBtn.addEventListener('click', () => {
+      if (currentMode === 'ar') return;
+
+      startARMode();
+
+      markerModeBtn.classList.remove('active');
+      arModeBtn.classList.add('active');
+    });
+
+
+    /* =========================================================
+      WINDOW RESIZE
+      ========================================================= */
+
+    window.addEventListener('resize', () => {
+      if (renderer.xr.isPresenting) return;
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+
+    /* =========================================================
+      INITIAL STARTUP — begin in marker mode
+      ========================================================= */
+
+    startMarkerMode();
+
+  </script>
 
 </body>
 </html>
