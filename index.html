@@ -499,6 +499,7 @@
     const loader = new GLTFLoader();
 
     const MONITOR_SCALE = 0.2;
+    const MONITOR_VERTICAL_OFFSET = 0.075;
     const MONITOR_FILL_INTENSITY = 10;
 
     let leftMonitorGroup = null;
@@ -755,6 +756,7 @@
     function placeAtReticle(group) {
 
       group.position.setFromMatrixPosition(reticle.matrix);
+      group.position.y += MONITOR_VERTICAL_OFFSET;
       faceCamera(group);
       group.visible = true;
 
@@ -1008,7 +1010,7 @@
             const pose = match.results[0].getPose(referenceSpace);
             draggingObject.position.set(
               pose.transform.position.x,
-              pose.transform.position.y,
+              pose.transform.position.y + MONITOR_VERTICAL_OFFSET,
               pose.transform.position.z
             );
             faceCamera(draggingObject);
