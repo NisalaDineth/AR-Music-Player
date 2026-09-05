@@ -14,3 +14,6 @@ Royalty Free Music for Videos (Safe)
 Music track: Jamaican Rasta by Walen
 Source: https://freetouse.com/music
 Free Background Music for Videos
+
+# Moniter model
+Bass Speakers by Zsky [CC-BY] (https://creativecommons.org/licenses/by/3.0/) via Poly Pizza (https://poly.pizza/m/c60iEzqbEw)
